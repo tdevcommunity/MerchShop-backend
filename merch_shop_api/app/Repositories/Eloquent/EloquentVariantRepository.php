@@ -99,13 +99,22 @@ final class EloquentVariantRepository extends EloquentRepository implements Vari
 
     public function lockForSale(array $uuids): Collection
     {
+        /*
+         * `product.category` est chargee avec le produit, et non laissee en
+         * acces paresseux : la categorie est recopiee sur chaque ligne de
+         * commande (OrderService::createItems), donc sans ce chargement elle
+         * declencherait une requete par ligne au moment de la copie. Le verrou
+         * ne porte que sur les variantes, et la categorie n'a pas a etre
+         * verrouillee : la renommer ne rend pas une variante invendable.
+         */
         /** @var Collection<int, Variant> $variants */
         $variants = $this->query()
             ->whereIn('uuid', $uuids)
-            ->with('product:id,name,status')
+            ->with('product:id,name,status,category_id')
+            ->with('product.category:id,name')
             ->orderBy('id')
             ->lockForUpdate()
-            ->get(['id', 'uuid', 'product_id', 'sku', 'name', 'price', 'stock', 'status']);
+            ->get(['id', 'uuid', 'product_id', 'sku', 'name', 'size', 'color', 'price', 'stock', 'status']);
 
         return $variants;
     }

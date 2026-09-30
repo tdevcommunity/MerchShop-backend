@@ -42,6 +42,21 @@ trait ProductPayloadRules
             'description' => ['nullable', 'string', 'max:10000'],
 
             /**
+             * Photo du produit, en URL absolue (hebergee chez Cloudinary ou
+             * ailleurs).
+             *
+             * La regle `url` refuse un chemin relatif. Une URL relative semble
+             * plus simple a saisir, mais elle n'est resolue que par le front qui
+             * a la meme origine, ce qui casse des que la boutique est servie
+             * ailleurs que l'API, et rend impossible de servir l'image depuis un
+             * autre domaine.
+             *
+             * Elle reste facultative : un produit sans photo est publiable, la
+             * boutique affichant un cadre vide a la place.
+             */
+            'image_url' => ['nullable', 'url', 'max:2048'],
+
+            /**
              * `whereNull('deleted_at')` : une catégorie supprimée logiquement
              * n'est pas une destination valide, alors que la ligne existe
              * encore en base. Sans cette condition, la validation passerait et
@@ -88,6 +103,20 @@ trait ProductPayloadRules
             'variants.*.sku' => ['required', 'string', 'max:100'],
 
             'variants.*.name' => ['required', 'string', 'min:1', 'max:150'],
+
+            /*
+             * Taille et couleur, en plus du libelle `name`.
+             *
+             * Elles ne sont pas requises : un accessoire n'a ni taille ni
+             * couleur, et un textile peut n'avoir qu'une declinaison « Taille
+             * unique ». Exiger les deux rendrait la majorite des variantes de
+             * goods impossible a saisir, alors qu'elles ne sont qu'une
+             * decomposition analytique de `name` (section 13 de la spec Data),
+             * pas une caracteristique de vente.
+             */
+            'variants.*.size' => ['nullable', 'string', 'max:50'],
+
+            'variants.*.color' => ['nullable', 'string', 'max:50'],
 
             /**
              * Prix en francs CFA, donc un entier : le franc CFA n'a pas de
@@ -136,6 +165,10 @@ trait ProductPayloadRules
             'default_variant.sku' => ['nullable', 'string', 'max:100'],
 
             'default_variant.name' => ['nullable', 'string', 'min:1', 'max:150'],
+
+            'default_variant.size' => ['nullable', 'string', 'max:50'],
+
+            'default_variant.color' => ['nullable', 'string', 'max:50'],
 
             'default_variant.price' => ['required_with:default_variant', new PriceInXof],
 
@@ -191,18 +224,23 @@ trait ProductPayloadRules
         return [
             'name' => 'nom',
             'description' => 'description',
+            'image_url' => 'photo du produit',
             'category_id' => 'catégorie',
             'slug' => 'slug',
             'status' => 'statut',
             'variants' => 'variantes',
             'variants.*.sku' => 'référence (SKU) de la variante',
             'variants.*.name' => 'nom de la variante',
+            'variants.*.size' => 'taille de la variante',
+            'variants.*.color' => 'couleur de la variante',
             'variants.*.price' => 'prix de la variante',
             'variants.*.stock' => 'stock de la variante',
             'variants.*.status' => 'statut de la variante',
             'default_variant' => 'variante par défaut',
             'default_variant.sku' => 'référence (SKU) de la variante par défaut',
             'default_variant.name' => 'nom de la variante par défaut',
+            'default_variant.size' => 'taille de la variante par défaut',
+            'default_variant.color' => 'couleur de la variante par défaut',
             'default_variant.price' => 'prix de la variante par défaut',
             'default_variant.stock' => 'stock de la variante par défaut',
         ];

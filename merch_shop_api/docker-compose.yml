@@ -1,0 +1,80 @@
+name: merch-shop-api
+
+# ---------------------------------------------------------------------------
+# Pile de developpement locale : API Laravel + PostgreSQL + Redis.
+#
+#   docker compose up -d --build
+#   docker compose exec app php artisan migrate --force
+#
+# Toute la configuration Laravel (hotes PostgreSQL et Redis, secrets, APP_KEY)
+# vit dans merch_shop_api/.env, PAS dans un bloc environment: ici.
+#
+# Raison : le serveur est lance par "php artisan serve", qui ne transmet au
+# processus PHP qu'une allowlist minimale de variables (APP_ENV, PATH,
+# XDEBUG_*) et met toutes les autres a false, cf.
+# ServeCommand::$passthroughVariables. C'est une mesure de securite pour ne pas
+# exposer les secrets au processus qui traite les requetes. Consequence : un
+# DB_HOST declare dans environment: serait parfaitement invisible pour une
+# requete HTTP, et l'API tenterait de joindre 127.0.0.1 au lieu du service.
+# ---------------------------------------------------------------------------
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /var/www/html
+    volumes:
+      # Code source de l'hote pour le rechargement a chaud.
+      - .:/var/www/html
+      # vendor et les assets Vite restent ceux de l'image : le hote n'a pas de
+      # vendor/ et ces repertoires doivent survivre au montage du code.
+      - vendor:/var/www/html/vendor
+      - public-build:/var/www/html/public/build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: merchshop
+      POSTGRES_USER: merchshop
+      POSTGRES_PASSWORD: merchshop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U merchshop -d merchshop"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  vendor:
+  public-build:
+  pgdata:
+  redisdata:

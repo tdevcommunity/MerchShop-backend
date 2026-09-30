@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'transaction_id',
     'status',
     'paid_at',
+    'failed_at',
     'failure_reason',
 ])]
 #[RouteKey('uuid')]
@@ -77,6 +78,7 @@ class Payment extends Model
             'provider' => PaymentProvider::class,
             'status' => PaymentStatus::class,
             'paid_at' => 'datetime',
+            'failed_at' => 'datetime',
         ];
     }
 }

@@ -10,6 +10,7 @@
     "license": "MIT",
     "require": {
         "endroid/qr-code": "^6.1",
+        "cloudinary/cloudinary_php": "^3",
         "ext-gd": "*",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",
