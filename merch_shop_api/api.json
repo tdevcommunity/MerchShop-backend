@@ -1,0 +1,3426 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Laravel",
+        "version": "v1",
+        "description": "API du festival TDEV : authentification par session et catalogue merch (cat\u00e9gories, produits, variantes). L'authentification repose sur un cookie de session accompagn\u00e9 du jeton CSRF : la route `/auth/csrf-token` fournit ce jeton, et toute \u00e9criture doit renvoyer l'en-t\u00eate `X-XSRF-TOKEN`. Les r\u00e9ponses sont en camelCase, les requ\u00eates et les query parameters en snake_case. Les lectures du catalogue sont publiques et ne renvoient que les \u00e9l\u00e9ments actifs ; les \u00e9critures exigent le r\u00f4le administrateur."
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000/api"
+        }
+    ],
+    "security": [
+        {
+            "apiKey": []
+        }
+    ],
+    "paths": {
+        "/v1/auth/csrf-token": {
+            "get": {
+                "operationId": "v1.auth.csrf-token",
+                "description": "Cette route doit rester publique et sans limitation de debit : c'est la\npremiere requete du front, avant toute session, et c'est elle qui fait\nposer le cookie XSRF-TOKEN. La mettre derriere `auth` rendrait\nimpossible toute premiere ecriture.",
+                "summary": "Jeton CSRF destine a etre renvoye dans le header X-XSRF-TOKEN",
+                "tags": [
+                    "Auth"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/auth/register": {
+            "post": {
+                "operationId": "v1.auth.register",
+                "summary": "Inscription : cree le compte et ouvre sa session",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RegisterRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/auth/login": {
+            "post": {
+                "operationId": "v1.auth.login",
+                "summary": "Connexion : verifie les identifiants et ouvre la session",
+                "tags": [
+                    "Auth"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LoginRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/auth/logout": {
+            "post": {
+                "operationId": "v1.auth.logout",
+                "summary": "Deconnexion : invalide la session et purge le jeton CSRF",
+                "tags": [
+                    "Auth"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "const": "Deconnexion effectuee."
+                                                }
+                                            },
+                                            "required": [
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/auth/me": {
+            "get": {
+                "operationId": "v1.auth.me",
+                "description": "Le middleware `auth` garantit qu'un utilisateur existe, mais pas que le\ntype rendu est bien un User : on verifie plutot que de laisser une\nconversion implicite.",
+                "summary": "Profil du compte connecte",
+                "tags": [
+                    "Auth"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/categories": {
+            "post": {
+                "operationId": "v1.categories.store",
+                "tags": [
+                    "Category"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StoreCategoryRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "get": {
+                "operationId": "v1.categories.index",
+                "summary": "Liste paginee des categories actives",
+                "tags": [
+                    "Category"
+                ],
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Nombre d'\u00e9l\u00e9ments par page. La valeur est born\u00e9e entre 1 et le maximum de configuration ; une valeur hors-borne est ramen\u00e9e \u00e0 la borne plut\u00f4t que refus\u00e9e.",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 24
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page de cat\u00e9gories actives.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/CategoryResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "currentPage": {
+                                                    "type": "integer"
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "lastPage": {
+                                                    "type": "integer"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "perPage": {
+                                                    "type": "integer"
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "page": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "page",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "currentPage",
+                                                "from",
+                                                "lastPage",
+                                                "path",
+                                                "perPage",
+                                                "to",
+                                                "total",
+                                                "links"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/categories/{uuid}": {
+            "put": {
+                "operationId": "v1.categories.update",
+                "tags": [
+                    "Category"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateCategoryRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`CategoryResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/CategoryResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "v1.categories.destroy",
+                "tags": [
+                    "Category"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "const": "Categorie supprimee."
+                                                }
+                                            },
+                                            "required": [
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            },
+            "get": {
+                "operationId": "v1.categories.show",
+                "tags": [
+                    "Category"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`CategoryResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/CategoryResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/health": {
+            "get": {
+                "operationId": "v1.health",
+                "description": "Deux d\u00e9tails sont norm\u00e9s ici \u00e0 la main, parce que la r\u00e9solution\nautomatique ne les voit pas : la r\u00e9ponse reste envelopp\u00e9e sous `data`,\ncomme toute autre ressource, et ses cl\u00e9s sont en camelCase, la conversion\n\u00e9tant appliqu\u00e9e sur la charge utile finale par `NormalizesResponseKeys`.",
+                "summary": "La forme de la r\u00e9ponse est d\u00e9clar\u00e9e ici plut\u00f4t que laiss\u00e9e \u00e0\nl'inf\u00e9rence : la sonde n'enveloppe aucun mod\u00e8le, son rapport \u00e9tant\nassembl\u00e9 depuis plusieurs sources, il n'y a donc rien \u00e0 d\u00e9duire d'une\nclasse. Sans ce type, la sp\u00e9cification d\u00e9crirait la r\u00e9ponse comme une\nsimple cha\u00eene \u2014 ce qui est faux, et induirait le front en erreur",
+                "tags": [
+                    "Health"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "L'API et ses d\u00e9pendances r\u00e9pondent.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "apiVersion": {
+                                                    "type": "string"
+                                                },
+                                                "checks": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "status",
+                                                "apiVersion",
+                                                "checks"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Au moins une d\u00e9pendance est indisponible.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "apiVersion": {
+                                                    "type": "string"
+                                                },
+                                                "checks": {
+                                                    "type": "object",
+                                                    "additionalProperties": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "status",
+                                                "apiVersion",
+                                                "checks"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/orders": {
+            "post": {
+                "operationId": "v1.orders.store",
+                "description": "La session est lue ici et non dans la validation : la commande est\npublique, donc la requete ne peut pas exiger d'etre authentifiee, et\nrattacher un compte est une consequence de l'etat de la session, pas une\ndonnee fournie par le client.\n\nUne commande invitee part avec son jeton d'acces, qui est sa seule voie de\nretour : les routes de lecture exigent une session, et sans ce jeton ce\nclient ne pourrait ni relire sa commande, ni afficher son QR apres\npaiement. Le jeton n'est renvoye qu'ici, une fois ; les lectures suivantes\ns'en servent en entete.",
+                "summary": "Passage de commande",
+                "tags": [
+                    "Order"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StoreOrderRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                },
+                "security": []
+            },
+            "get": {
+                "operationId": "v1.orders.index",
+                "description": "La liste ne sort jamais les commandes d'un autre compte, quelle que soit\nla personne connectee : elle est filtree sur `user_id` dans la couche\nservice, et non dans le controleur, pour que la meme requete SQL reste\nla seule voie d'acces aux commandes d'un client.",
+                "summary": "Commandes du client connecte",
+                "tags": [
+                    "Order"
+                ],
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Restreint la liste a un statut de commande. La valeur est l'entier expose par `data.status` (1 en attente de paiement, 2 payee, 3 prete au retrait, 4 retiree, 5 annulee, 6-remboursee). Une valeur inconnue est refusee par un 422 `INVALID_FILTER` plutot que d'etre ignoree : un front ne doit pas croire avoir filtre alors que la liste est complete.",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 2
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page des commandes du client connecte.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/OrderResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "currentPage": {
+                                                    "type": "integer"
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "lastPage": {
+                                                    "type": "integer"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "perPage": {
+                                                    "type": "integer"
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "page": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "page",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "currentPage",
+                                                "from",
+                                                "lastPage",
+                                                "path",
+                                                "perPage",
+                                                "to",
+                                                "total",
+                                                "links"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/orders/{uuid}": {
+            "get": {
+                "operationId": "v1.orders.show",
+                "description": "Deux voies d'acces : la session, jugee par la policy, et le jeton d'une\ncommande invitee, juge par `OrderAccess`. Elles ne se recouvrent pas \u2014 un\njeton n'ouvre rien sur une commande rattachee a un compte \u2014 et c'est\npourquoi la policy n'a pas besoin de connaitre le jeton.",
+                "summary": "Une commande, avec son QR de retrait s'il en existe un",
+                "tags": [
+                    "Order"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Order-Token",
+                        "in": "header",
+                        "description": "Jeton d'acces d'une commande invitee, renvoye une seule fois par `POST /orders`. A presenter en plus d'une session pour lire la commande qui l'a emis, et son QR de retrait. Un jeton n'ouvre rien sur une commande rattachee a un compte : un client connecte est juge par sa session.",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "9f2c1d0b7a4e6f8c5b3d2a1908e7f6c5d4b3a2918e7f6c5d4b3a29180e7f6c5d"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Commande, avec le contenu de son QR de retrait s'il en existe un.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/OrderResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Ni la session ni le jeton ne permettent de lire cette commande.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/orders/{uuid}/cancel": {
+            "post": {
+                "operationId": "v1.orders.cancel",
+                "description": "Le statut est verifie par le service dans la meme transaction que la\nrestitution du stock : entre la lecture et l'ecriture, une confirmation\nde paiement a pu arriver, et c'est la transition qui tranche.",
+                "summary": "Annulation d'une commande non encore reglee",
+                "tags": [
+                    "Order"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`OrderResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/OrderResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/orders/{uuid}/qr": {
+            "get": {
+                "operationId": "v1.orders.qr",
+                "description": "L'image est envoyee telle quelle, avec un nom de fichier non devinable\net un cache court : le QR vaut jusqu'au retrait, et il ne doit pas\nrester dans un cache intermediaire plus longtemps que la commande.\n\nLe client sans compte atteint aussi cette image, avec le jeton de sa\ncommande : son QR doit pouvoir etre affiche avant d'arriver au stand,\nfaute de quoi il n'a aucun moyen de montrer ce qu'il a paye. Un invite\npresent au guichet n'a pas ce probleme, puisque le guichetier lit la\ncommande dans sa file.",
+                "summary": "Image PNG du QR d'une commande",
+                "tags": [
+                    "OrderPickup"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "X-Order-Token",
+                        "in": "header",
+                        "description": "Jeton d'acces d'une commande invitee. Permet a un client sans compte d'afficher son QR avant de venir au stand.",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "9f2c1d0b7a4e6f8c5b3d2a1908e7f6c5d4b3a2918e7f6c5d4b3a29180e7f6c5d"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Image PNG du QR de retrait.",
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "Cache-Control": {
+                                "schema": {
+                                    "type": "string",
+                                    "const": "private, max-age=300"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Ni la session ni le jeton ne permettent de lire cette commande.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "FORBIDDEN"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "La commande n'a pas de QR : elle n'est pas encore payee, ou a deja ete retiree.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/pickup/orders": {
+            "get": {
+                "operationId": "v1.pickup.orders.index",
+                "description": "Les commandes livrees n'y apparaissent pas : elles n'ont pas de QR, donc\naucun guichetier ne peut les servir par un scan.",
+                "summary": "File des commandes a servir au stand",
+                "tags": [
+                    "OrderPickup"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page des commandes de retrait, de la plus recente a la plus ancienne.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/OrderResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "currentPage": {
+                                                    "type": "integer"
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "lastPage": {
+                                                    "type": "integer"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "perPage": {
+                                                    "type": "integer"
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "page": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "page",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "currentPage",
+                                                "from",
+                                                "lastPage",
+                                                "path",
+                                                "perPage",
+                                                "to",
+                                                "total",
+                                                "links"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/pickup/scan": {
+            "post": {
+                "operationId": "v1.pickup.scan",
+                "description": "Le scan et le marquage \u00ab prete \u00bb sont deux moments distincts : le premier\ndit que l'argent est entre, le second que l'article est en rayon et peut\npartir. Confondre les deux ferait disparaitre la file d'attente, qui\nexiste precisement pour que le guichetier sache quoi servir en premier.\n\nLe QR est verifie avant toute ecriture : un contenu fabrique a la main,\nou le QR d'une commande deja servie, est refuse sans toucher a la base.",
+                "summary": "Servir une commande scannee",
+                "tags": [
+                    "OrderPickup"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PickupScanRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Commande servie.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/OrderResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "404": {
+                        "description": "Aucun QR ne correspond a une commande de retrait.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Commande trouvee mais non servable : deja retiree, impayee, ou livree.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/orders/{uuid}/ready": {
+            "post": {
+                "operationId": "v1.orders.ready",
+                "summary": "Marquer une commande payee comme prete a etre remise",
+                "tags": [
+                    "OrderPickup"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`OrderResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/OrderResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/orders/{uuid}/picked-up": {
+            "post": {
+                "operationId": "v1.orders.picked-up",
+                "description": "Sert au rattrapage quand le telephone du guichet est hors service : la\ncommande est alors choisie dans la liste plutot que scannee. Le controle\nd'acces est le meme, seule l'entree change.",
+                "summary": "Servir une commande connue, sans scan",
+                "tags": [
+                    "OrderPickup"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`OrderResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/OrderResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            }
+        },
+        "/v1/payments/webhooks/fedapay": {
+            "post": {
+                "operationId": "v1.payments.webhooks.fedapay",
+                "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+                "summary": "Notification de paiement d'un operateur",
+                "tags": [
+                    "PaymentWebhook"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentNotificationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification rapprochee, paiement accepte ou refuse.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "orderUuid": {
+                                                    "type": "string"
+                                                },
+                                                "orderNumber": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "orderUuid",
+                                                "orderNumber",
+                                                "status"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Notification signee mais mal formee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "VALIDATION_ERROR",
+                                                        "INVALID_FILTER"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Signature absente ou invalide : la notification n\u2019est pas traitee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/payments/webhooks/kkiapay": {
+            "post": {
+                "operationId": "v1.payments.webhooks.kkiapay",
+                "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+                "summary": "Notification de paiement d'un operateur",
+                "tags": [
+                    "PaymentWebhook"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentNotificationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification rapprochee, paiement accepte ou refuse.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "orderUuid": {
+                                                    "type": "string"
+                                                },
+                                                "orderNumber": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "orderUuid",
+                                                "orderNumber",
+                                                "status"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Notification signee mais mal formee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "VALIDATION_ERROR",
+                                                        "INVALID_FILTER"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Signature absente ou invalide : la notification n\u2019est pas traitee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/payments/webhooks/paygate": {
+            "post": {
+                "operationId": "v1.payments.webhooks.paygate",
+                "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+                "summary": "Notification de paiement d'un operateur",
+                "tags": [
+                    "PaymentWebhook"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentNotificationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification rapprochee, paiement accepte ou refuse.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "orderUuid": {
+                                                    "type": "string"
+                                                },
+                                                "orderNumber": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "orderUuid",
+                                                "orderNumber",
+                                                "status"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Notification signee mais mal formee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "VALIDATION_ERROR",
+                                                        "INVALID_FILTER"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Signature absente ou invalide : la notification n\u2019est pas traitee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/payments/webhooks/flooz": {
+            "post": {
+                "operationId": "v1.payments.webhooks.flooz",
+                "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+                "summary": "Notification de paiement d'un operateur",
+                "tags": [
+                    "PaymentWebhook"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentNotificationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification rapprochee, paiement accepte ou refuse.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "orderUuid": {
+                                                    "type": "string"
+                                                },
+                                                "orderNumber": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "orderUuid",
+                                                "orderNumber",
+                                                "status"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Notification signee mais mal formee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "VALIDATION_ERROR",
+                                                        "INVALID_FILTER"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Signature absente ou invalide : la notification n\u2019est pas traitee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/payments/webhooks/tmoney": {
+            "post": {
+                "operationId": "v1.payments.webhooks.tmoney",
+                "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+                "summary": "Notification de paiement d'un operateur",
+                "tags": [
+                    "PaymentWebhook"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PaymentNotificationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Notification rapprochee, paiement accepte ou refuse.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "orderUuid": {
+                                                    "type": "string"
+                                                },
+                                                "orderNumber": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "orderUuid",
+                                                "orderNumber",
+                                                "status"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Notification signee mais mal formee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                                    "enum": [
+                                                        "VALIDATION_ERROR",
+                                                        "INVALID_FILTER"
+                                                    ]
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                                },
+                                                "details": {
+                                                    "type": "object",
+                                                    "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                                    "properties": {
+                                                        "fields": {
+                                                            "type": "object",
+                                                            "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                            "additionalProperties": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message",
+                                                "details"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Signature absente ou invalide : la notification n\u2019est pas traitee.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/products": {
+            "post": {
+                "operationId": "v1.products.store",
+                "tags": [
+                    "Product"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StoreProductRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "`JsonResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/JsonResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "get": {
+                "operationId": "v1.products.index",
+                "description": "Seuls les produits actifs sont visibles par defaut. Les filtres\n`category_id` et `search` servent a la navigation ; le filtre `status` est\nvolontairement absent de l'API publique (voir ProductService::listCatalog,\nqui en refuse l'usage non admin).\n\nLes attributs de documentation sont port\u00e9s par l'action et non par les\nm\u00e9thodes priv\u00e9es de filtre : la g\u00e9n\u00e9ration ne lit que l'action de route,\nun attribut pos\u00e9 plus bas ne serait jamais collect\u00e9.",
+                "summary": "Liste paginee du catalogue",
+                "tags": [
+                    "Product"
+                ],
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Nombre d'\u00e9l\u00e9ments par page. La valeur est born\u00e9e entre 1 et le maximum de configuration ; une valeur hors-borne est ramen\u00e9e \u00e0 la borne plut\u00f4t que refus\u00e9e.",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 24
+                    },
+                    {
+                        "name": "category_id",
+                        "in": "query",
+                        "description": "Restreint la liste \u00e0 une cat\u00e9gorie. Une valeur non enti\u00e8re ou n\u00e9gative est refus\u00e9e par un 422 `INVALID_FILTER`.",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "example": 3
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Terme de recherche port\u00e9 sur le nom du produit. Un joker SQL envoy\u00e9 par le client est trait\u00e9 comme un caract\u00e8re litt\u00e9ral, et une valeur non textuelle est ignor\u00e9e.",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "example": "t-shirt"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Page de produits actifs.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ProductResource"
+                                            }
+                                        },
+                                        "links": {
+                                            "type": "object",
+                                            "properties": {
+                                                "first": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "last": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "prev": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "next": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "first",
+                                                "last",
+                                                "prev",
+                                                "next"
+                                            ]
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "currentPage": {
+                                                    "type": "integer"
+                                                },
+                                                "from": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "lastPage": {
+                                                    "type": "integer"
+                                                },
+                                                "path": {
+                                                    "type": "string"
+                                                },
+                                                "perPage": {
+                                                    "type": "integer"
+                                                },
+                                                "to": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "links": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "url": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "page": {
+                                                                "type": [
+                                                                    "integer",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "active": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "url",
+                                                            "label",
+                                                            "page",
+                                                            "active"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "currentPage",
+                                                "from",
+                                                "lastPage",
+                                                "path",
+                                                "perPage",
+                                                "to",
+                                                "total",
+                                                "links"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "links",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/products/{uuid}": {
+            "put": {
+                "operationId": "v1.products.update",
+                "tags": [
+                    "Product"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateProductRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "`ProductResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/ProductResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "v1.products.destroy",
+                "tags": [
+                    "Product"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "const": "Produit supprime."
+                                                }
+                                            },
+                                            "required": [
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                }
+            },
+            "get": {
+                "operationId": "v1.products.show",
+                "tags": [
+                    "Product"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "`ProductResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/ProductResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/products/{uuid}/variants": {
+            "get": {
+                "operationId": "v1.products.variants",
+                "description": "Exposee separement de `show` parce que la page de detail d'un produit\naffiche la fiche, tandis que le selectionneur de declinaison recharge\nsouvent la seule liste des variantes en changeant de taille, sans\nrecharger tout le produit.",
+                "summary": "Variantes d'un produit",
+                "tags": [
+                    "Product"
+                ],
+                "parameters": [
+                    {
+                        "name": "uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of `VariantResource`",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/VariantResource"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "apiKey": {
+                "type": "apiKey",
+                "description": "Cookie de session pos\u00e9 par la route de connexion. Les \u00e9critures exigent en plus l'en-t\u00eate `X-XSRF-TOKEN`, obtenu via `/auth/csrf-token`.",
+                "in": "cookie",
+                "name": "laravel-session"
+            }
+        },
+        "schemas": {
+            "CatalogStatus": {
+                "type": "integer",
+                "description": "Statut de publication d'un element du catalogue. Partage par les categories, produits et variantes : ces trois entites obeissent au meme cycle de vie (on publie un produit, on ne le supprime pas, on le retire de la vente). Un enum par entite serait dupliquation.  Les valeurs sont stockees en base, donc consideres comme figees : les applications partenaires (app de scan, back-office) s'y branchent.\n| |\n|---|\n| `0` <br/> Element masque du catalogue, conserve pour l'historique des commandes. |\n| `1` <br/> Element visible et achetable. |",
+                "enum": [
+                    0,
+                    1
+                ],
+                "title": "CatalogStatus"
+            },
+            "CategoryResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "slug": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "productsCount": {
+                        "type": "integer"
+                    },
+                    "createdAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "updatedAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "name",
+                    "slug",
+                    "status",
+                    "productsCount"
+                ],
+                "title": "CategoryResource"
+            },
+            "FulfillmentMethod": {
+                "type": "string",
+                "description": "Mode de retrait d'une commande. Le tunnel d'achat propose ces deux choix au moment du checkout ; ils ne sont pas equivalents pour le suivi : seule une commande en retrait genere un QR Code a scanner au stand merch.\n| |\n|---|\n| `pickup` <br/> Retrait sur place le jour J au stand merch, via QR Code. |\n| `delivery` <br/> Expedition par un transporteur. |",
+                "enum": [
+                    "pickup",
+                    "delivery"
+                ],
+                "title": "FulfillmentMethod"
+            },
+            "InvoiceResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "invoiceNumber": {
+                        "type": "string"
+                    },
+                    "subTotal": {
+                        "type": "string"
+                    },
+                    "discount": {
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "string"
+                    },
+                    "issuedAt": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "invoiceNumber",
+                    "subTotal",
+                    "discount",
+                    "total",
+                    "issuedAt"
+                ],
+                "title": "InvoiceResource"
+            },
+            "JsonResource": {
+                "type": "string",
+                "title": "JsonResource"
+            },
+            "LoginRequest": {
+                "type": "object",
+                "description": "Payload de connexion.\n\nLa validation se limite a la forme des champs. Le couple email / mot de\npasse est verifie par AuthService, qui renvoie un message unique pour tout\nechec : distinguer ici \u00ab email mal forme \u00bb de \u00ab identifiants invalides \u00bb\nn'apporterait rien au visiteur et confirmerait a un attaquant ce qu'il\ncherche.",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 255
+                    },
+                    "password": {
+                        "type": "string",
+                        "maxLength": 72
+                    },
+                    "remember": {
+                        "type": "boolean",
+                        "description": "\u00ab Se souvenir de moi \u00bb n'est pas un simple bool\u00e9en de confort : il\nfait poser un cookie de longue dur\u00e9e par le navigateur. On\nv\u00e9rifie qu'il s'agit bien d'un bool\u00e9en, sinon un tableau ou une\ncha\u00eene arbitraire passerait dans la session sans \u00eatre contr\u00f4l\u00e9e."
+                    }
+                },
+                "required": [
+                    "email",
+                    "password"
+                ],
+                "title": "LoginRequest"
+            },
+            "OrderItemResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "productUuid": {
+                        "type": "string",
+                        "description": "Identifiants du catalogue, pour le lien \u00ab voir le produit \u00bb du\nback-office. Ils ne sont pas suffisants pour reconstruire le\nprix : c'est `unitPrice` qui fait foi."
+                    },
+                    "variantUuid": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "variantName": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "unitPrice": {
+                        "type": "string"
+                    },
+                    "totalPrice": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "productUuid",
+                    "productName",
+                    "quantity",
+                    "unitPrice",
+                    "totalPrice"
+                ],
+                "title": "OrderItemResource"
+            },
+            "OrderResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "orderNumber": {
+                        "type": "string",
+                        "description": "Reference lisible, dite au client. L'uuid reste la cle technique :\nun numero sequentiel serait devinable, et cette API n'a pas a\ndependre du secret d'un identifiant."
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "fulfillmentMethod": {
+                        "type": "string"
+                    },
+                    "pickupStatus": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Le droit de retrait et l'usage sont deux etats distincts : une\ncommande payee a un droit ouvert alors qu'aucun retrait n'a encore\neu lieu. Les confondre ferait apparaitre un retrait enregistre\nqui n'existe pas dans le suivi du plan de tracking."
+                    },
+                    "pickupTime": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "participantId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "subTotal": {
+                        "type": "string"
+                    },
+                    "discount": {
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "string"
+                    },
+                    "shippingAddress": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderItemResource"
+                        }
+                    },
+                    "payments": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PaymentResource"
+                        }
+                    },
+                    "invoice": {
+                        "$ref": "#/components/schemas/InvoiceResource"
+                    },
+                    "pickupQrPayload": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Le contenu du QR n'est rendu que pour la commande concernee et\npour un tiers de confiance : un client qui liste ses commandes\nn'a pas a telecharger cinq PNG d'affilee, et un tiers ne doit pas\npouvoir fabriquer un QR d'une commande qui n'est pas la sienne. L'invite qui detient le jeton de sa commande compte comme son\nproprietaire : sans cela, un client sans compte payerait puis ne\npourrait pas afficher le QR que son paiement vient d'ouvrir."
+                    },
+                    "guestAccessToken": {
+                        "type": "null",
+                        "description": "Jeton d'acces d'une commande invitee, renvoye une seule fois, a la\ncreation. Le client doit le conserver : il n'est ni devinable depuis\nl'uuid de la commande, ni rejouable apres coup, ni recuperable par\nla suite, exactement comme un mot de passe."
+                    },
+                    "createdAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "updatedAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "allowedActions": {
+                        "type": "array",
+                        "description": "Transitions possibles, pour que le back-office n'essaie pas une\naction refus\u00e9e et que le client sache s'il peut encore annuler.\nLe service est la seule source de verite sur ces transitions.",
+                        "items": {}
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "orderNumber",
+                    "status",
+                    "fulfillmentMethod",
+                    "subTotal",
+                    "discount",
+                    "total"
+                ],
+                "title": "OrderResource"
+            },
+            "PaymentMethod": {
+                "type": "string",
+                "description": "Moyen de paiement utilise par l'acheteur. Distinct de PaymentProvider : la methode est ce que l'acheteur a choisi (mobile money, carte), le fournisseur est l'infrastructure qui a traite l'appel (FedaPay, KKiaPay...). Un seul aggregateur peut encaisser les deux methodes, d'ou la separation.\n| |\n|---|\n| `mobile_money` <br/> Mobile Money togoise (Flooz, T-Money) via un aggregateur. |\n| `card` <br/> Carte bancaire via un agregateur. |",
+                "enum": [
+                    "mobile_money",
+                    "card"
+                ],
+                "title": "PaymentMethod"
+            },
+            "PaymentNotificationRequest": {
+                "type": "object",
+                "description": "Corps de la notification de paiement envoyee par l'agregateur.\n\nCette route n'a ni session ni jeton : sa seule defense est la signature,\nverifiee par WebhookSignatureVerifier avant que cette classe ne soit\nseulement chargee. Les regles ci-dessous ne servent donc qu'a ecarter les\nnotifications mal formees d'un operateur legitime, pas a la securiser.\n\n`reference` est l'uuid de la tentative de paiement, envoye a l'operateur au\nmoment du checkout : c'est par lui que la notification est rapprochee, et\njamais par un identifiant interne devinable.",
+                "properties": {
+                    "reference": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "transaction_id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 190
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "La liste n'est qu'un garde-fou : elle n'autorise que le vocabulaire\nque cet API documente, et la correspondance reelle vers l'etat\ninterne est faite par PaymentStatus::fromOperator(), qui tolere\naussi les libelles d'autres operateurs.",
+                        "enum": [
+                            "pending",
+                            "success",
+                            "successful",
+                            "failed",
+                            "refused"
+                        ]
+                    },
+                    "amount": {
+                        "type": "string",
+                        "description": "Le montant est verifie contre la commande, et non accepte tel quel\n: c'est cette comparaison qui empeche une notification portant le\nbon montant d'etre rejouee sur une autre commande. Il est en francs CFA, donc entier, comme le prix d'une variante.\nUn operateur peut l'ecrire \u00ab 2500.00 \u00bb : la regle lit les deux\nformes, mais refuse \u00ab 2500.50 \u00bb, qui ne correspond a aucun montant\npayable et signalerait une divergence entre la notification et la\ncommande."
+                    },
+                    "failure_reason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "reference",
+                    "status",
+                    "amount"
+                ],
+                "title": "PaymentNotificationRequest"
+            },
+            "PaymentResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "method": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "transactionId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "failureReason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "paidAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "amount",
+                    "method",
+                    "status"
+                ],
+                "title": "PaymentResource"
+            },
+            "PickupScanRequest": {
+                "type": "object",
+                "description": "Lecture du QR au guichet.\n\nLe scan n'envoie que le contenu du QR : l'application de controle n'a pas a\nconnaitre la commande a l'avance, et l'identifiant voyage donc dans le\ncontenu encode plutot que dans l'URL. C'est ce qui evite qu'un lien de scan\npuisse servir a ouvrir une commande par simple navigation.",
+                "properties": {
+                    "payload": {
+                        "type": "string",
+                        "maxLength": 2000
+                    }
+                },
+                "required": [
+                    "payload"
+                ],
+                "title": "PickupScanRequest"
+            },
+            "ProductResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "slug": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "category": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "description": "La categorie est exposee en identifiant, nom et slug plutot qu'en\nressource imbriquee complete : un menu de navigation n'a besoin de\nrien d'autre, et une ressource imbriquee alourdirait chaque ligne\ndu catalogue pour rien.",
+                        "properties": {
+                            "uuid": {
+                                "type": "string"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "slug": {
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "uuid",
+                            "name",
+                            "slug"
+                        ]
+                    },
+                    "variants": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/VariantResource"
+                        }
+                    },
+                    "variantsCount": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0
+                    },
+                    "priceFrom": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "isAvailable": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "updatedAt": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "name",
+                    "slug",
+                    "status",
+                    "isAvailable"
+                ],
+                "title": "ProductResource"
+            },
+            "RegisterRequest": {
+                "type": "object",
+                "description": "Payload d'inscription.\n\nNi le role ni le statut ne sont acceptes ici, meme pas en facultatif : leur\npresence ouvrirait une escalade de privileges par simple ajout de cle dans\nle corps de la requete. Le service AuthService les force a CUSTOMER/ACTIVE.",
+                "properties": {
+                    "firstname": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 100
+                    },
+                    "lastname": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 100
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "Num\u00e9ro togolais : 8 chiffres commen\u00e7ant par 2, avec ou sans `+`\ninternational. Le service support a besoin d'un format saisissable,\npas d'un identifiant de base valide partout \u2014 un validateur d\u00e9di\u00e9\n(`Rule`) remplacerait cette regexp d\u00e8s qu'un autre pays ouvre la\nboutique. La r\u00e8gle d'unicit\u00e9 inclut les lignes supprim\u00e9es logiquement, ce\nqui est exactement ce qu'il faut ici : l'index unique porte sur la\ncolonne seule, donc un compte supprim\u00e9 occupe toujours son adresse.\nAppeler `withoutTrashed()` laisserait passer la validation puis\nferait \u00e9chouer l'insertion sur une violation de contrainte (erreur\n500).",
+                        "pattern": "^\\+?228[0-9]{8}$"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 255
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "Le mot de passe n'est jamais valid\u00e9 par une simple longueur : la\nlongueur seule pousse les comptes vers des phrases pr\u00e9visibles.\nLe constructeur `Password` exprime la r\u00e8gle m\u00e9tier d'un coup et\nreste la seule forme qui accepte `mixedCase` (les r\u00e8gles en\ncha\u00eene n'exposent pas les contraintes de composition). `max:72` : bcrypt ignore ce qui suit 72 octets, donc un mot de\npasse plus long est silencieusement tronqu\u00e9 et deux valeurs\ndiff\u00e9rentes deviennent le m\u00eame compte."
+                    },
+                    "password_confirmation": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "firstname",
+                    "lastname",
+                    "phone",
+                    "email",
+                    "password",
+                    "password_confirmation"
+                ],
+                "title": "RegisterRequest"
+            },
+            "StoreCategoryRequest": {
+                "type": "object",
+                "description": "Payload de creation d'une categorie.\n\nLe `slug` est facultatif : absent, il est derive du nom par le service,\nqui garantit l'unicite. Il reste acceptable pour un import ou une URL\nimposee, auquel cas le service refuse toute collision.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 150
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 5000
+                    },
+                    "slug": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "`alpha_dash` et non une regexp ouverte : le slug finit dans une\nURL et dans un nom de fichier, donc il ne doit contenir ni\nespace ni accent. Le service applique Str::slug() de toute\nfa\u00e7on, cette r\u00e8gle \u00e9vite seulement d'accepter puis de\ntransformer silencieusement une valeur d\u00e9j\u00e0 invalide.",
+                        "maxLength": 150
+                    },
+                    "status": {
+                        "description": "Enum ferm\u00e9, sans liste de cha\u00eenes en dur : CatalogStatus est la\nseule source des valeurs acceptables, donc ajouter un statut doit\npasser par une migration du mod\u00e8le et non par une cha\u00eene accept\u00e9e\nen base.\n\n| |\n|---|\n| `0` <br/> Element masque du catalogue, conserve pour l'historique des commandes. |\n| `1` <br/> Element visible et achetable. |",
+                        "$ref": "#/components/schemas/CatalogStatus"
+                    }
+                },
+                "required": [
+                    "name"
+                ],
+                "title": "StoreCategoryRequest"
+            },
+            "StoreOrderRequest": {
+                "type": "object",
+                "description": "Payload de creation d'une commande.\n\nLe payload ne contient volontairement aucun prix. Le client envoie des\nidentifiants de variante et des quantites, et le serveur calcule les\nmontants : accepter un prix ici rendrait chaque front capable d_ecrire le\nchiffre a encaisser.\n\nLa commande est publique \u2014 un festival vend a des visiteurs qui n'ont pas de\ncompte \u2014 donc `authorize()` ne verifie rien. La session est lue ensuite par le\ncontroleur, qui rattache la commande au compte lorsqu'il y en a un, et laisse\n`user_id` nul sinon.",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "uuid": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "description": "`distinct` refuse deux lignes du meme article. Sans cette regle, le\nservice les fusionnerait, ce qui marche mais masque une saisie\nerronee : deux lignes \u00ab 1 t-shirt, taille M \u00bb et \u00ab 2 t-shirts,\ntaille M \u00bb dans la meme commande sont presque toujours une faute\nde l'utilisateur, et il vaut mieux le lui dire."
+                                },
+                                "quantity": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 20
+                                }
+                            },
+                            "required": [
+                                "uuid",
+                                "quantity"
+                            ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 20,
+                        "uniqueItems": true
+                    },
+                    "fulfillment_method": {
+                        "$ref": "#/components/schemas/FulfillmentMethod"
+                    },
+                    "shipping_address": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "L'adresse n'est exigee que pour une livraison. Une adresse\nfacultative en retrait accepterait un retrait sans adresse, ce\nqui est correct, et une adresse obligatoire en retrait\nbloquerait un retrait par erreur de saisie.",
+                        "minLength": 5,
+                        "maxLength": 500
+                    },
+                    "payment_method": {
+                        "$ref": "#/components/schemas/PaymentMethod"
+                    },
+                    "participant_id": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Reference du participant servie au stand. Sert au controle du\nnombre d'articles par personne, pas a l'identification de la\ncommande : elle n'accorde aucun droit a elle seule.",
+                        "maxLength": 100
+                    }
+                },
+                "required": [
+                    "items",
+                    "fulfillment_method",
+                    "payment_method"
+                ],
+                "title": "StoreOrderRequest"
+            },
+            "StoreProductRequest": {
+                "type": "object",
+                "description": "Payload de cr\u00e9ation d'un produit.\n\nUn produit vendable porte toujours un prix, donc l'API refuse d'en cr\u00e9er un\nqui n'en aurait pas : soit le produit est d\u00e9coup\u00e9 en variantes, soit il\nporte une `default_variant` dont le prix et le stock sont exig\u00e9s. La\ncoh\u00e9rence des deux est v\u00e9rifi\u00e9e en fin de validation, car elle porte sur la\npr\u00e9sence des cl\u00e9s et non sur la valeur d'un champ.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 200
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 10000
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "description": "`whereNull('deleted_at')` : une cat\u00e9gorie supprim\u00e9e logiquement\nn'est pas une destination valide, alors que la ligne existe\nencore en base. Sans cette condition, la validation passerait et\nle produit deviendrait invisible du catalogue public."
+                    },
+                    "slug": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 200
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/CatalogStatus"
+                    },
+                    "variants": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "uuid": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "format": "uuid",
+                                    "description": "L'uuid identifie une variante existante de CE produit. Il est\nfacultatif : son absence ne signifie pas \u00ab cr\u00e9\u00e9 \u00bb de fa\u00e7on\ncertaine, car le service reconna\u00eet aussi une variante \u00e0 partir de\nson SKU. C'est pourquoi un uuid inconnu est refus\u00e9 par le service\n(422) et non ignor\u00e9 par la validation."
+                                },
+                                "sku": {
+                                    "type": "string",
+                                    "description": "La r\u00e9f\u00e9rence vendue au guichet : 100 caract\u00e8res suffisent\nlargement, la borne \u00e9vite un payload arbitrairement long en base.",
+                                    "maxLength": 100
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 150
+                                },
+                                "price": {
+                                    "type": "string",
+                                    "description": "Prix en francs CFA, donc un entier : le franc CFA n'a pas de\nsubdivision, et \u00ab 2500,50 \u00bb n'est ni encaisseable par un mobile\nmoney ni affichable sur un ticket. Un prix non entier est refus\u00e9\nplut\u00f4t qu'arrondi, parce qu'un arrondi silencieux laisserait croire \u00e0\nun montant que personne n'a choisi. Le format est tol\u00e9rant : \u00ab 2500 \u00bb, \u00ab 2500.00 \u00bb et \u00ab 2500,00 \u00bb\nd\u00e9signent la m\u00eame somme, parce qu'un back-office saisit au clavier\nn'\u00e9crit pas forc\u00e9ment la forme de l'API."
+                                },
+                                "stock": {
+                                    "type": "integer",
+                                    "description": "Le stock recoupe la contrainte CHECK (stock >= 0) de la base, qui\nne s'applique qu'\u00e0 PostgreSQL et MySQL. La valider ici rend le\ncomportement identique sur SQLite, o\u00f9 la contrainte n'existe pas,\net \u00e9vite un 500 sur une base qui, elle, l'applique.",
+                                    "minimum": 0,
+                                    "maximum": 4294967295
+                                },
+                                "status": {
+                                    "$ref": "#/components/schemas/CatalogStatus"
+                                }
+                            },
+                            "required": [
+                                "sku",
+                                "name",
+                                "price",
+                                "stock"
+                            ]
+                        }
+                    },
+                    "default_variant": {
+                        "type": "object",
+                        "properties": {
+                            "sku": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "maxLength": 100
+                            },
+                            "name": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "minLength": 1,
+                                "maxLength": 150
+                            },
+                            "price": {
+                                "type": "string"
+                            },
+                            "stock": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 4294967295
+                            },
+                            "status": {
+                                "$ref": "#/components/schemas/CatalogStatus"
+                            }
+                        }
+                    }
+                },
+                "required": [
+                    "name",
+                    "category_id"
+                ],
+                "title": "StoreProductRequest"
+            },
+            "UpdateCategoryRequest": {
+                "type": "object",
+                "description": "Payload de mise a jour d'une categorie.\n\nToutes les regles sont facultatives : une mise a jour partielle (le\nback-office renomme une categorie sans y toucher) ne doit pas avoir a\nrenvoyer le descriptif complet. Le service separe alors les cles presentes\ndes cles absentes.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 150
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 5000
+                    },
+                    "slug": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 150
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/CatalogStatus"
+                    }
+                },
+                "title": "UpdateCategoryRequest"
+            },
+            "UpdateProductRequest": {
+                "type": "object",
+                "description": "Payload de mise a jour d'un produit.\n\nChaque champ est facultatif, ce qui autorise deux usages distincts et\nlegitimes : corriger un libelle sans toucher aux declinaisons, ou renvoyer la\nliste complete des variantes pour la resynchroniser.\n\nL'absence de la cle `variants` signifie \u00ab variantes inchangees \u00bb. Une liste\nvide signifie \u00ab plus aucune variante \u00bb. Le service fait cette distinction ;\nla validation ne peut que la permettre, pas l'interpreter.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 200
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 10000
+                    },
+                    "category_id": {
+                        "type": "integer",
+                        "description": "`whereNull('deleted_at')` : une cat\u00e9gorie supprim\u00e9e logiquement\nn'est pas une destination valide, alors que la ligne existe\nencore en base. Sans cette condition, la validation passerait et\nle produit deviendrait invisible du catalogue public."
+                    },
+                    "slug": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 200
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/CatalogStatus"
+                    },
+                    "variants": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "uuid": {
+                                    "type": [
+                                        "string",
+                                        "null"
+                                    ],
+                                    "format": "uuid",
+                                    "description": "L'uuid identifie une variante existante de CE produit. Il est\nfacultatif : son absence ne signifie pas \u00ab cr\u00e9\u00e9 \u00bb de fa\u00e7on\ncertaine, car le service reconna\u00eet aussi une variante \u00e0 partir de\nson SKU. C'est pourquoi un uuid inconnu est refus\u00e9 par le service\n(422) et non ignor\u00e9 par la validation."
+                                },
+                                "sku": {
+                                    "type": "string",
+                                    "description": "La r\u00e9f\u00e9rence vendue au guichet : 100 caract\u00e8res suffisent\nlargement, la borne \u00e9vite un payload arbitrairement long en base.",
+                                    "maxLength": 100
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 150
+                                },
+                                "price": {
+                                    "type": "string",
+                                    "description": "Prix en francs CFA, donc un entier : le franc CFA n'a pas de\nsubdivision, et \u00ab 2500,50 \u00bb n'est ni encaisseable par un mobile\nmoney ni affichable sur un ticket. Un prix non entier est refus\u00e9\nplut\u00f4t qu'arrondi, parce qu'un arrondi silencieux laisserait croire \u00e0\nun montant que personne n'a choisi. Le format est tol\u00e9rant : \u00ab 2500 \u00bb, \u00ab 2500.00 \u00bb et \u00ab 2500,00 \u00bb\nd\u00e9signent la m\u00eame somme, parce qu'un back-office saisit au clavier\nn'\u00e9crit pas forc\u00e9ment la forme de l'API."
+                                },
+                                "stock": {
+                                    "type": "integer",
+                                    "description": "Le stock recoupe la contrainte CHECK (stock >= 0) de la base, qui\nne s'applique qu'\u00e0 PostgreSQL et MySQL. La valider ici rend le\ncomportement identique sur SQLite, o\u00f9 la contrainte n'existe pas,\net \u00e9vite un 500 sur une base qui, elle, l'applique.",
+                                    "minimum": 0,
+                                    "maximum": 4294967295
+                                },
+                                "status": {
+                                    "$ref": "#/components/schemas/CatalogStatus"
+                                }
+                            },
+                            "required": [
+                                "sku",
+                                "name",
+                                "price",
+                                "stock"
+                            ]
+                        }
+                    }
+                },
+                "title": "UpdateProductRequest"
+            },
+            "VariantResource": {
+                "type": "object",
+                "properties": {
+                    "uuid": {
+                        "type": "string"
+                    },
+                    "sku": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string",
+                        "description": "Prix en francs CFA, entier : le franc CFA n'a pas de subdivision,\net un entier en JSON ne peut pas perdre de precision a l'aller-\nretour comme le ferait un flottant."
+                    },
+                    "stock": {
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "isAvailable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "uuid",
+                    "sku",
+                    "name",
+                    "price",
+                    "stock",
+                    "status",
+                    "isAvailable"
+                ],
+                "title": "VariantResource"
+            }
+        },
+        "responses": {
+            "ValidationException": {
+                "description": "Donn\u00e9es envoy\u00e9es invalides. `details.fields` nomme chaque champ refus\u00e9.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "object",
+                                    "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                            "enum": [
+                                                "VALIDATION_ERROR",
+                                                "INVALID_FILTER"
+                                            ]
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                        },
+                                        "details": {
+                                            "type": "object",
+                                            "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                            "properties": {
+                                                "fields": {
+                                                    "type": "object",
+                                                    "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                    "additionalProperties": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "code",
+                                        "message",
+                                        "details"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "error"
+                            ]
+                        }
+                    }
+                }
+            },
+            "AuthenticationException": {
+                "description": "Authentification requise. Ouvrir une session via `POST /auth/login`.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "object",
+                                    "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                            "enum": [
+                                                "UNAUTHENTICATED"
+                                            ]
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                        },
+                                        "details": {
+                                            "type": "object",
+                                            "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                            "properties": {
+                                                "fields": {
+                                                    "type": "object",
+                                                    "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                    "additionalProperties": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "code",
+                                        "message",
+                                        "details"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "error"
+                            ]
+                        }
+                    }
+                }
+            },
+            "AuthorizationException": {
+                "description": "R\u00f4le insuffisant pour cette op\u00e9ration. La session est valide, le compte ne l'est pas.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "object",
+                                    "description": "Cause de l'\u00e9chec, expos\u00e9e pour que le client puisse la traiter sans analyser le message.",
+                                    "properties": {
+                                        "code": {
+                                            "type": "string",
+                                            "description": "Code d'erreur stable, ind\u00e9pendant du texte du message.",
+                                            "enum": [
+                                                "FORBIDDEN"
+                                            ]
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "description": "Message destin\u00e9 \u00e0 l'affichage, en fran\u00e7ais. Le texte est libre d'\u00e9voluer : seul le `code` est stable et doit \u00eatre utilis\u00e9 pour brancher une logique."
+                                        },
+                                        "details": {
+                                            "type": "object",
+                                            "description": "Pr\u00e9cisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                                            "properties": {
+                                                "fields": {
+                                                    "type": "object",
+                                                    "description": "Messages de validation, index\u00e9s par le nom du champ tel que le client l'a envoy\u00e9. Les cl\u00e9s ne sont pas converties en camelCase, afin de rester retrouvables dans la requ\u00eate d'origine.",
+                                                    "additionalProperties": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "code",
+                                        "message",
+                                        "details"
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "error"
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
