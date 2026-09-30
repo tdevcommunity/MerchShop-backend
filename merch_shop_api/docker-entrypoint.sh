@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Waiting for postgres..."
-until php artisan migrate:status --no-interaction 2>/dev/null | grep -q "Migration"; do
+echo "Waiting for database..."
+until php artisan tinker --execute="echo 'DB connected';" 2>/dev/null | grep -q "DB connected"; do
   sleep 1
 done
 

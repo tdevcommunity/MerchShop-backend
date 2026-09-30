@@ -12,6 +12,7 @@ use App\Exceptions\ApiException;
 use App\Models\AnalyticsEvent;
 use App\Models\VisitorAcquisition;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
