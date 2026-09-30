@@ -54,6 +54,29 @@ final class ProductController extends ApiController
     }
 
     /**
+     * Lecture d'un produit par son slug, pour les URLs lisibles du shop.
+     *
+     * Le slug est l'identifiant lisible d'un produit, expose par la ressource
+     * et par le plan de tracking. La boutique le met dans l'URL, et sans cette
+     * route le client devrait parcourir le catalogue page par page pour
+     * retrouver un produit.
+     *
+     * Retourne un 404, pas un 500, si le slug n'existe pas : le service est
+     * le seul a connaitre la difference entre « introuvable » et « produit
+     * absent du catalogue actif », et le contrôleur n'a pas a la recomposer.
+     */
+    public function showBySlug(string $slug): ProductResource
+    {
+        $product = $this->products->findBySlug($slug);
+
+        if ($product === null) {
+            throw new ApiException('Produit introuvable.', 404, 'PRODUCT_NOT_FOUND');
+        }
+
+        return ProductResource::make($product);
+    }
+
+    /**
      * Variantes d'un produit.
      *
      * Exposee separement de `show` parce que la page de detail d'un produit

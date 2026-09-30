@@ -88,6 +88,18 @@ final class ProductService
     }
 
     /**
+     * Charge un produit par son slug, pour les URLs lisibles du shop.
+     *
+     * Meme logique que `findOrFail` : un produit masque n'est pas resolvable.
+     * Retourne `null` au lieu de lever une exception, laisse au controleur le
+     * choix de la forme d'erreur a renvoyer.
+     */
+    public function findBySlug(string $slug): ?Product
+    {
+        return $this->products->findBySlug($slug);
+    }
+
+    /**
      * Variantes d'un produit, dans un ordre stable.
      *
      * @return Collection<int, Variant>
@@ -104,7 +116,7 @@ final class ProductService
      * declinaises vendables n'a aucun interet pour la boutique, et mieux vaut
      * que l'echec porte sur l'ensemble.
      *
-     * @param  array{name: string, description?: string|null, category_id: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>, default_variant?: array<string, mixed>|null}  $data
+     * @param  array{name: string, description?: string|null, image_url?: string|null, category_id: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>, default_variant?: array<string, mixed>|null}  $data
      */
     public function create(array $data): Product
     {
@@ -114,6 +126,7 @@ final class ProductService
             $product = $this->products->create([
                 'name' => $data['name'],
                 'description' => $data['description'] ?? null,
+                'image_url' => $data['image_url'] ?? null,
                 'category_id' => $category->id,
                 'slug' => $this->resolveSlug($data['slug'] ?? null, $data['name']),
                 'status' => $data['status'] ?? CatalogStatus::ACTIVE,
@@ -160,6 +173,8 @@ final class ProductService
             'price' => $this->money->toAmount($default['price']),
             'stock' => $default['stock'],
             'status' => $default['status'] ?? $product->status,
+            'size' => $default['size'] ?? null,
+            'color' => $default['color'] ?? null,
         ];
     }
 
@@ -177,7 +192,7 @@ final class ProductService
      * mise a jour partielle d'un produit, et la redefinition complete de ses
      * declinaisons depuis un seul appel.
      *
-     * @param  array{name?: string, description?: string|null, category_id?: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>}  $data
+     * @param  array{name?: string, description?: string|null, image_url?: string|null, category_id?: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>}  $data
      */
     public function update(Product $product, array $data): Product
     {
@@ -190,6 +205,16 @@ final class ProductService
 
             if (array_key_exists('description', $data)) {
                 $attributes['description'] = $data['description'];
+            }
+
+            /*
+             * `array_key_exists` et non un `??` : la validation accepte `null`,
+             * et envoyer une photo vide doit retirer la photo. Avec un `??`, une
+             * valeur nulle serait lue comme absente et l'ancienne photo
+             * resterait en place sans que l'appelant puisse la retirer.
+             */
+            if (array_key_exists('image_url', $data)) {
+                $attributes['image_url'] = $data['image_url'];
             }
 
             if (array_key_exists('status', $data)) {
@@ -291,6 +316,18 @@ final class ProductService
             $attributes = [
                 'sku' => $sku,
                 'name' => (string) $variantData['name'],
+
+                /*
+                 * Taille et couleur se copient telles quelles, sans repli sur
+                 * `name`. Le libelle reste le libelle : forcer « Taille unique »
+                 * dans une colonne `size` et « Noir » dans `color` quand
+                 * l'administrateur ne les a pas saisis inventerait une donnee
+                 * qu'aucun etage superieur n'a produite. Le guichet et la
+                 * boutique s'en servent pour l'affichage, ou `name` suffit.
+                 */
+                'size' => $variantData['size'] ?? null,
+                'color' => $variantData['color'] ?? null,
+
                 'price' => $this->priceAsAmount($variantData['price']),
                 'stock' => $variantData['stock'],
                 'status' => $variantData['status'] ?? $product->status,

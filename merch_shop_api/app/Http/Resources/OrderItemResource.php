@@ -35,6 +35,22 @@ final class OrderItemResource extends ApiResource
             'variantUuid' => $item->variant?->uuid,
 
             'productName' => $item->product_name,
+
+            /*
+             * Categorie, taille et couleur sont lues sur des colonnes figees de
+             * la ligne, et non sur le catalogue courant : meme traitement que
+             * `productName`, et pour la meme raison. Un produit deplace de
+             * categorie, ou une variante dont la couleur a change, ne doit pas
+             * reecrire l'historique d'une facture deja emise.
+             *
+             * La spec Data (section 13) en fait des donnees exigees par ligne,
+             * ce qui n'est tenable que si elles sont conservees au moment de la
+             * vente et pas recalculees plus tard.
+             */
+            'productCategory' => $item->product_category,
+            'size' => $item->size,
+            'color' => $item->color,
+
             'variantName' => $item->variant_name,
 
             'quantity' => $item->quantity,

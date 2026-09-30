@@ -26,6 +26,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'sub_total',
     'shipping_address',
     'discount',
+    'currency',
+    'delivery_fee',
     'total',
     'status',
     'fulfillment_method',

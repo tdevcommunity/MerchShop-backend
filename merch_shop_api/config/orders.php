@@ -21,6 +21,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frais de livraison
+    |--------------------------------------------------------------------------
+    |
+    | Montant applique a une commande livree, en francs CFA. Le retrait au
+    | stand n'en a pas : ces frais decrivent un transport que le client ne
+    | vient pas chercher, et non la vente du produit.
+    |
+    | Ce montant vient de la configuration et jamais du payload de commande.
+    | La regle suit celle du reste du fichier : aucun montant payable n'est
+    | calcule a partir d'une valeur envoye par le client, sinon le total a
+    | encaisser serait ecrit par celui qui paie.
+    |
+    | Comme tous les montants, il est fige sur la commande a sa creation : une
+    | commande passee sous un ancien tarif le conserve, et seules les nouvelles
+    | commandes voient le nouveau.
+    |
+    */
+
+    'delivery_fee' => (int) env('ORDER_DELIVERY_FEE', 0),
+
+    /*
+    |--------------------------------------------------------------------------
     | Numérotation des commandes
     |--------------------------------------------------------------------------
     |

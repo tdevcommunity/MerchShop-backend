@@ -63,8 +63,8 @@ Route::post('/orders', [OrderController::class, 'store'])
  | lorsqu'aucun compte n'est identifie : chercher un jeton par force brute se
  | heurte donc a la meme barriere qu'un mot de passe.
  */
-Route::get('/orders/{uuid}', [OrderController::class, 'show'])->name('orders.show');
-Route::get('/orders/{uuid}/qr', [OrderPickupController::class, 'qrCode'])->name('orders.qr');
+Route::get('/orders/{uuid}', [OrderController::class, 'show'])->whereUuid('uuid')->name('orders.show');
+Route::get('/orders/{uuid}/qr', [OrderPickupController::class, 'qrCode'])->whereUuid('uuid')->name('orders.qr');
 
 /*
  | Guichet : file d'attente et lecture du QR.
@@ -98,8 +98,8 @@ Route::middleware('auth')->group(function (): void {
           | depuis un jeton de lecture, seule l'affichage du QR l'est. Un client sans
           | compte annule donc par le guichet, qui est la voie prevue pour lui.
          */
-        Route::post('/{uuid}/cancel', [OrderController::class, 'cancel'])->name('cancel');
-        Route::post('/{uuid}/ready', [OrderPickupController::class, 'markReady'])->name('ready');
-        Route::post('/{uuid}/picked-up', [OrderPickupController::class, 'markPickedUp'])->name('picked-up');
+        Route::post('/{uuid}/cancel', [OrderController::class, 'cancel'])->whereUuid('uuid')->name('cancel');
+        Route::post('/{uuid}/ready', [OrderPickupController::class, 'markReady'])->whereUuid('uuid')->name('ready');
+        Route::post('/{uuid}/picked-up', [OrderPickupController::class, 'markPickedUp'])->whereUuid('uuid')->name('picked-up');
     });
 });

@@ -87,8 +87,21 @@ final class EloquentProductRepository extends EloquentRepository implements Prod
 
     public function findBySlug(string $slug): ?Product
     {
+        /*
+         * Meme filtre sur le statut que `findForCatalog` : un produit masque
+         * n'est pas resolvable par son slug. Une URL lisible partageant la meme
+         * cle que le slug d'un produit retire ne doit pas le servir.
+         *
+         * Les relations de catalogue sont chargees pour que la ressource puisse
+         * afficher les variantes sans appel supplementaire, comme pour le reste
+         * du catalogue.
+         */
         /** @var Product|null $product */
-        $product = $this->query()->where('slug', $slug)->first();
+        $product = $this->query()
+            ->active()
+            ->with($this->catalogRelations())
+            ->where('slug', $slug)
+            ->first();
 
         return $product;
     }

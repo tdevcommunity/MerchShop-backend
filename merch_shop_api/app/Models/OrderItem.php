@@ -19,7 +19,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'unit_price',
     'total_price',
     'product_name',
+    'product_category',
     'variant_name',
+    'size',
+    'color',
 ])]
 #[RouteKey('uuid')]
 class OrderItem extends Model

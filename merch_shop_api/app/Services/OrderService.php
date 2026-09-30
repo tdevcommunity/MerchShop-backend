@@ -151,12 +151,44 @@ final class OrderService
              */
             $discount = 0;
 
+            /*
+             * Frais de livraison.
+             *
+             * Lus dans la configuration et jamais dans le payload : un montant
+             * envoye par le client permettrait d'ecrire le chiffre a encaisser. Le
+             * retrait au stand n'en a pas, ce qui est le cas par defaut, donc le
+             * montant est nul sauf livraison.
+             */
+            $deliveryFee = $data['fulfillment_method'] === FulfillmentMethod::DELIVERY
+                ? (int) config('orders.delivery_fee')
+                : 0;
+
             $order = $this->createWithUniqueNumber([
                 'user_id' => ($data['user'] ?? null)?->id,
                 'sub_total' => $subTotal,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'discount' => $discount,
-                'total' => $subTotal - $discount,
+                'delivery_fee' => $deliveryFee,
+
+                /*
+                 * La devise est ecrite sur la commande plutot que deduite a la
+                 * lecture. Le festival n'encaisse qu'en francs CFA, mais un
+                 * montant sans devise n'est pas interpretable, et un jour ou une
+                 * seconde devise est acceptee, corriger celle-ci sur les lignes
+                 * existantes ferait dire « XOF » a des montants qui ne l'etaient
+                 * pas.
+                 */
+                'currency' => Money::CURRENCY,
+
+                /*
+                 * L'identite du total : sous-total, moins la remise, plus les
+                 * frais de livraison. Elle est ecrite ici, dans le seul endroit ou
+                 * le total est calcule, plutot que recomposee a chaque lecture,
+                 * pour qu'un montant affiche, facture et encaisse ne puissent pas
+                 * diverger.
+                 */
+                'total' => $subTotal - $discount + $deliveryFee,
+
                 'status' => OrderStatus::PENDING_PAYMENT,
                 'fulfillment_method' => $data['fulfillment_method'],
                 // Le droit au retrait n'existe que pour une commande de stand.
@@ -529,6 +561,20 @@ final class OrderService
                 'total_price' => $line['total'],
                 'product_name' => $variant->product?->name ?? 'Article retire du catalogue',
                 'variant_name' => $variant->name,
+
+                /*
+                 * Categorie, taille et couleur sont figees ici, au meme titre que
+                 * le nom : la ligne doit dire ce qui a ete vendu, pas ce que le
+                 * catalogue en dit aujourd'hui. Un produit deplace de categorie
+                 * entre deux festivals laisserait sinon ses ventes de l'ancien
+                 * rayon suivre le produit, et le comptage par taille et par
+                 * couleur deviendrait faux. La spec Data (section 13) en fait des
+                 * donnees exigees par ligne, ce qui suppose qu'elles soient
+                 * lisibles sans remonter au catalogue.
+                 */
+                'product_category' => $variant->product?->category?->name,
+                'size' => $variant->size,
+                'color' => $variant->color,
             ]);
         }
     }

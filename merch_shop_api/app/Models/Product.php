@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['category_id', 'name', 'description', 'slug', 'status'])]
+#[Fillable(['category_id', 'name', 'description', 'image_url', 'slug', 'status'])]
 #[RouteKey('uuid')]
 class Product extends Model
 {

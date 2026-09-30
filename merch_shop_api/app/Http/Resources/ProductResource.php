@@ -45,6 +45,18 @@ final class ProductResource extends ApiResource
             'uuid' => $product->uuid,
             'name' => $product->name,
             'description' => $product->description,
+
+            /*
+             * Photo du produit, en URL absolue.
+             *
+             * Elle est nullable : un produit publie sans photo doit rester
+             * publiable, et la boutique sait afficher un cadre vide a la place.
+             * Bloquer la publication sur l'absence d'image reviendrait a faire de
+             * l'illustration une condition de vente, alors qu'un t-shirt vendu au
+             * stand se vend d'abord par son prix et sa taille.
+             */
+            'image_url' => $product->image_url,
+
             'slug' => $product->slug,
             'status' => $product->status->value,
 

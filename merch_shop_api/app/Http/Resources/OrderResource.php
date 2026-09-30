@@ -4,10 +4,13 @@ namespace App\Http\Resources;
 
 use App\Enums\FulfillmentMethod;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Services\OrderService;
 use App\Services\PickupQrCodeService;
 use App\Support\Orders\OrderAccess;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * Representation d'une commande.
@@ -82,7 +85,48 @@ final class OrderResource extends ApiResource
 
             'subTotal' => $order->sub_total,
             'discount' => $order->discount,
+
+            /*
+             * Devise et frais de livraison.
+             *
+             * Les frais sont exprimes separement du sous-total et de la remise
+             * parce que la spec Data du festival (section 13) les veut distincts :
+             * le revenu du festival et le panier moyen ne doivent pas confondre ce
+             * qui vient de la vente de goodies avec ce qui vient du transport.
+             *
+             * La devise est stockee bien qu'elle soit constante aujourd'hui. Un
+             * montant sans devise n'est pas interpretable, et le jour ou une
+             * seconde devise est acceptee, la modifier sur les lignes existantes
+             * ferait dire « XOF » a des montants qui ne l'etaient pas.
+             */
+            'deliveryFee' => $order->delivery_fee,
+            'currency' => $order->currency,
+
             'total' => $order->total,
+
+            /*
+             * Etat du paiement au niveau de la commande.
+             *
+             * Les paiements restent exposes tels quels dans `payments` : c'est
+             * l'historique complet, avec le detail par tentatives. Ces deux
+             * champs en sont la condensation, prise sur la tentative la plus
+             * recente, et la spec Data (section 13) les exige par commande et
+             * non par paiement : un tableau de bord qui agrege des lignes de
+             * commande ne peut pas se permettre de faire lui-meme cet arbitrage.
+             *
+             * Absents tant que la relation n'est pas chargee, plutot que nuls :
+             * « paiement inconnu » et « aucun paiement » ne sont pas la meme
+             * information, et les confondre ferait disparaitre des commandes d'un
+             * rapport au lieu d'y indiquer une donnee manquante.
+             */
+            'paymentStatus' => $this->when(
+                $order->relationLoaded('payments'),
+                fn (): ?string => $this->latestPayment($order)?->status->value,
+            ),
+            'paymentMethod' => $this->when(
+                $order->relationLoaded('payments'),
+                fn (): ?string => $this->latestPayment($order)?->method->value,
+            ),
 
             'shippingAddress' => $order->shipping_address,
 
@@ -171,6 +215,30 @@ final class OrderResource extends ApiResource
         return $user !== null
             && $user->role->canOperateMerch()
             && $user->status->isActive();
+    }
+
+    /**
+     * Paiement le plus recent de la commande, ou null.
+     *
+     * Une commande peut avoir plusieurs tentatives, typiquement un client qui
+     *change de moyen de paiement apres un echec. L'etat affiche au niveau de la
+     * commande est donc celui de la derniere, pas le premier ni un cumul : un
+     * client qui reessaie avec succes n'a pas eu un paiement en echec, il a eu
+     * une tentative en echec suivie d'une reussite.
+     *
+     * Le tri se fait en memoire plutot que par une requete, parce que la
+     * ressource ne peut pas charger la relation a la demande : le faire
+     * declencherait une requete par commande dans une liste, la ou le
+     * controleur l'a deja chargee ou a choisi de s'en passer.
+     */
+    private function latestPayment(Order $order): ?Payment
+    {
+        /** @var Collection<int, Payment> $payments */
+        $payments = $order->payments;
+
+        return $payments->sortByDesc(
+            fn (Payment $payment): CarbonImmutable => $payment->created_at ?? CarbonImmutable::now(),
+        )->first();
     }
 
     /**
