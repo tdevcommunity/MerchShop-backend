@@ -14,7 +14,7 @@ Il décrit les couches, la règle de dépendance et la marche à suivre pour ajo
 | Élément | Choix |
 |---|---|
 | Framework | Laravel 13 (PHP 8.3+) |
-| Base de données | SQLite en local ; **PostgreSQL** en production (`.env` de `merch_shop_api`) |
+| Base de données | PostgreSQL en local ; **PostgreSQL** en production (`.env` de `merch_shop_api`) |
 | Authentification | **Sessions Laravel** + CSRF (voir §7) |
 | Format | JSON, `camelCase` en réponse ; entrée et paramètres d'URL en `snake_case` |
 | Versionnement d'URL | `/api/v1/...` |

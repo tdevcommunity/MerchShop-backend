@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\Order\PaymentNotificationRequest;
 use App\Services\PaymentService;
 use App\Support\Payments\WebhookSignatureVerifier;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -40,9 +39,6 @@ final class PaymentWebhookController extends ApiController
      * l'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,
      * ce qui pousse l'operateur a reessayer.
      */
-    #[OpenApiResponse(status: 200, description: 'Notification rapprochee, paiement accepte ou refuse.')]
-    #[OpenApiResponse(status: 401, description: 'Signature absente ou invalide : la notification n’est pas traitee.')]
-    #[OpenApiResponse(status: 422, description: 'Notification signee mais mal formee.')]
     public function handle(PaymentNotificationRequest $request, PaymentProvider $provider): JsonResponse
     {
         $this->signatures->verify($request, $provider);

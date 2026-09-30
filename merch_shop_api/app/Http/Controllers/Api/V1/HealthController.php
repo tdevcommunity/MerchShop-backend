@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Resources\HealthResource;
 use App\Services\SystemHealthService;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -30,16 +29,6 @@ final class HealthController extends ApiController
      * comme toute autre ressource, et ses clés sont en camelCase, la conversion
      * étant appliquée sur la charge utile finale par `NormalizesResponseKeys`.
      */
-    #[OpenApiResponse(
-        status: 200,
-        description: 'L\'API et ses dépendances répondent.',
-        type: 'array{data: array{status: string, apiVersion: string, checks: array<string, string>}}',
-    )]
-    #[OpenApiResponse(
-        status: 503,
-        description: 'Au moins une dépendance est indisponible.',
-        type: 'array{data: array{status: string, apiVersion: string, checks: array<string, string>}}',
-    )]
     public function __invoke(SystemHealthService $health): JsonResponse
     {
         $report = $health->readiness();

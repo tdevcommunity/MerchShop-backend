@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(
+            fn (Request $request): ?string => $request->is('api/*') ? null : route('login'),
+        );
+
         // Active le middleware throttle:api sur le groupe "api". Le plafond est
         // defini dans config/api.php et enregistre dans AppServiceProvider.
         $middleware->throttleApi();

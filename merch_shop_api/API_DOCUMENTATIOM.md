@@ -4,7 +4,7 @@ Cette documentation décrit l'API Laravel du TDEV Festival 2026 : catalogue,
 authentification, commandes, paiement et retrait.
 
 Le fichier décrit l'implémentation actuelle. La spécification OpenAPI générée
-par Scramble reste disponible sur `/docs/api` et `/docs/api.json`.
+par L5-Swagger est disponible sur `/api/documentation` et `/docs`.
 
 ## 1. Accès et conventions
 
@@ -66,7 +66,130 @@ actif.
 les limites de débit sont configurées dans `config/api.php` et documentées dans
 `.env.example`.
 
-## 2. Endpoints
+## 2. Données de test
+
+Le seeder principal crée un environnement local de démonstration avec les
+comptes suivants, tous avec le mot de passe `password` :
+
+| Rôle | E-mail |
+|---|---|
+| Administrateur | `admin@merchshop.test` |
+| Staff | `staff@merchshop.test` |
+| Client | `client@merchshop.test` |
+
+Il crée également deux catégories, deux produits et quatre variantes en stock.
+Pour le relancer : `php artisan db:seed`.
+
+## 3. Endpoints
+
+### Payloads et réponses JSON attendues
+
+Les tableaux ci-dessous décrivent le contrat client/serveur. Les payloads entrants sont en `snake_case` et les réponses JSON sont sérialisées en `camelCase` par les resources API.
+
+La colonne `Requis` indique si un champ est obligatoire (`Oui`) ou facultatif (`Non`).
+
+#### Authentification
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/auth/register` | `firstname` | `string` | Oui | prénom |
+|  | `lastname` | `string` | Oui | nom |
+|  | `phone` | `string` | Oui | numéro de téléphone |
+|  | `email` | `string` | Oui | adresse e-mail unique |
+|  | `password` | `string` | Oui | mot de passe en clair côté client, hashé côté serveur |
+| `POST /api/v1/auth/login` | `email` | `string` | Oui | adresse e-mail |
+|  | `password` | `string` | Oui | mot de passe |
+|  | `remember` | `boolean` | Non | active une session persistante |
+
+Réponse attendue : `201` pour l'inscription ou `200` pour la connexion, avec un objet `UserResource`.
+
+#### Catalogue : catégories
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/categories` | `name` | `string` | Oui | nom de la catégorie |
+|  | `description` | `string|null` | Non | description de la catégorie |
+|  | `slug` | `string` | Oui | identifiant lisible pour l'URL |
+|  | `status` | `string` | Oui | `active` ou `inactive` |
+| `PUT /api/v1/categories/{uuid}` | `name` | `string` | Oui | nom de la catégorie |
+|  | `description` | `string|null` | Non | description de la catégorie |
+|  | `slug` | `string` | Oui | identifiant lisible pour l'URL |
+|  | `status` | `string` | Oui | `active` ou `inactive` |
+
+Réponse attendue : `201` pour la création et `200` pour la mise à jour, avec un objet `CategoryResource`.
+
+#### Catalogue : produits et variantes
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/products` | `name` | `string` | Oui | nom du produit |
+|  | `description` | `string|null` | Non | description du produit |
+|  | `slug` | `string` | Oui | slug public du produit |
+|  | `category_uuid` | `string` | Oui | UUID de la catégorie parent |
+|  | `status` | `string` | Oui | `active` ou `inactive` |
+|  | `variants` | `array<object>` | Oui | liste des variantes |
+| `PUT /api/v1/products/{uuid}` | `name` | `string` | Oui | nom du produit |
+|  | `description` | `string|null` | Non | description du produit |
+|  | `slug` | `string` | Oui | slug public du produit |
+|  | `category_uuid` | `string` | Oui | UUID de la catégorie parent |
+|  | `status` | `string` | Oui | `active` ou `inactive` |
+|  | `variants` | `array<object>` | Oui | liste des variantes |
+
+Payload d'une variante :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `uuid` | `string|null` | Non | UUID existant pour une mise à jour |
+| `sku` | `string` | Oui | SKU unique de la variante |
+| `size` | `string|null` | Non | taille (S, M, L, XL, etc.) |
+| `color` | `string|null` | Non | couleur |
+| `price` | `integer` | Oui | prix en XOF |
+| `stock` | `integer` | Oui | quantité disponible |
+| `is_default` | `boolean` | Non | indique que la variante est la variante par défaut |
+| `status` | `string` | Oui | `active` ou `inactive` |
+
+Réponse attendue : `201` ou `200` avec un objet `ProductResource` contenant les données de la catégorie et des variantes publiées.
+
+#### Commandes
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/orders` | `items` | `array<object>` | Oui | lignes de commande |
+|  | `fulfillment_method` | `string` | Oui | `pickup` ou `delivery` |
+|  | `shipping_address` | `string|null` | Non | adresse de livraison si applicable |
+|  | `participant_id` | `string|null` | Non | identifiant participant pour un achat externe |
+
+Payload d'une ligne de commande :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `variant_uuid` | `string` | Oui | UUID de la variante concernée |
+| `quantity` | `integer` | Oui | quantité commandée |
+| `unit_price` | `integer` | Non | prix unitaire calculé côté serveur |
+| `notes` | `string|null` | Non | commentaire libre |
+
+Réponse attendue : `201` avec un objet `OrderResource`. Pour une commande invitée, le token de consultation est retourné une seule fois dans la réponse et doit être réenvoyé via l'en-tête `X-Guest-Order-Token`.
+
+#### Retrait au guichet
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/pickup/scan` | `payload` | `string` | Oui | contenu du QR lu au guichet |
+
+Réponse attendue : `200` avec l'objet de commande ou le statut de retrait. Un QR invalide ou une commande introuvable renvoie `404` ou `409` selon le cas.
+
+#### Webhooks de paiement
+
+| Endpoint | Champ du payload | Type | Requis | Description |
+|---|---|---|---|---|
+| `POST /api/v1/payments/webhooks/{provider}` | `event` | `string` | Oui | type d'événement fourni par le provider |
+|  | `transaction_id` | `string` | Oui | identifiant de transaction fournisseur |
+|  | `status` | `string` | Oui | statut final ou intermédiaire retourné par le provider |
+|  | `amount` | `integer` | Oui | montant payé en sous-unité |
+|  | `currency` | `string` | Oui | devise de paiement |
+|  | `signature` | `string` | Oui | signature vérifiée par le serveur |
+
+Réponse attendue : `200` avec un objet minimal de confirmation : `orderUuid`, `orderNumber` et `status`.
 
 ### Santé
 
@@ -74,9 +197,19 @@ les limites de débit sont configurées dans `config/api.php` et documentées da
 |---|---|---|---|---|
 | GET | `/api/v1/health` | Public | `HealthController` | `__invoke` |
 
-Retourne l'état de disponibilité de l'application et de la base de données.
-Un état non prêt est rendu avec le statut HTTP correspondant, sans contourner
-la sérialisation des ressources.
+Payload : aucun.
+
+Réponse attendue : `200` avec un objet de santé :
+
+```json
+{
+  "status": "ok",
+  "database": "connected",
+  "timestamp": "2026-09-30T12:00:00Z"
+}
+```
+
+En cas de base indisponible, la réponse est un statut HTTP correspondant au problème sans contourner la sérialisation standard.
 
 ### Authentification
 
@@ -90,9 +223,16 @@ la sérialisation des ressources.
 
 #### `GET /auth/csrf-token`
 
-Initialise la session et renvoie le token CSRF. Le token sert ensuite dans
-`X-XSRF-TOKEN`. Cette route est volontairement publique et sans limitation de
-débit renforcée.
+Payload : aucun.
+
+Réponse attendue : `200` avec un objet JSON contenant le token CSRF et l’état de la session :
+
+```json
+{
+  "csrfToken": "abc123...",
+  "message": "CSRF token generated"
+}
+```
 
 #### `POST /auth/register`
 
@@ -102,6 +242,21 @@ session. Le client ne peut pas choisir le rôle ou le statut du compte.
 Payload attendu : `firstname`, `lastname`, `phone`, `email`, `password`.
 Réponse : `201` avec `UserResource`.
 
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "firstname": "Jean",
+  "lastname": "Dupont",
+  "phone": "+22890000000",
+  "email": "jean.dupont@example.com",
+  "role": "customer",
+  "status": "active",
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
+
 #### `POST /auth/login`
 
 Vérifie `email` et `password`, puis ouvre la session. Le champ optionnel
@@ -109,16 +264,61 @@ Vérifie `email` et `password`, puis ouvre la session. Le champ optionnel
 mot de passe incorrect utilisent le même message afin d'éviter l'énumération
 des comptes.
 
+Payload attendu : `email`, `password`, `remember` (optionnel).
 Réponse : `200` avec `UserResource`.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "firstname": "Jean",
+  "lastname": "Dupont",
+  "phone": "+22890000000",
+  "email": "jean.dupont@example.com",
+  "role": "customer",
+  "status": "active",
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
 
 #### `POST /auth/logout`
 
 Invalide la session et purge le token CSRF. Réponse `200` avec un message dans
 `data`.
 
+Payload : aucun.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "data": {
+    "message": "Logged out successfully"
+  }
+}
+```
+
 #### `GET /auth/me`
 
 Retourne l'utilisateur authentifié courant avec `UserResource`.
+
+Payload : aucun.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "firstname": "Jean",
+  "lastname": "Dupont",
+  "phone": "+22890000000",
+  "email": "jean.dupont@example.com",
+  "role": "customer",
+  "status": "active",
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
 
 ### Catalogue : catégories
 
@@ -133,17 +333,108 @@ Retourne l'utilisateur authentifié courant avec `UserResource`.
 `GET /categories` retourne uniquement les catégories visibles du catalogue,
 avec pagination et clés de réponse en camelCase.
 
+Query params : `per_page` (optionnel), `page` (optionnel).
+
+Exemple de réponse attendue :
+
+```json
+{
+  "data": [
+    {
+      "id": "11111111-2222-3333-4444-555555666666",
+      "name": "Accessoires",
+      "slug": "accessoires",
+      "description": "Produits complémentaires",
+      "status": "active",
+      "createdAt": "2026-09-30T12:00:00Z"
+    }
+  ],
+  "links": {
+    "first": "...",
+    "last": "...",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "currentPage": 1,
+    "lastPage": 1,
+    "perPage": 15,
+    "total": 1
+  }
+}
+```
+
 `GET /categories/{uuid}` retourne une catégorie active ou une erreur `404`.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "11111111-2222-3333-4444-555555666666",
+  "name": "Accessoires",
+  "slug": "accessoires",
+  "description": "Produits complémentaires",
+  "status": "active",
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
 
 `POST /categories` accepte le payload validé par `StoreCategoryRequest`, crée
 la catégorie et renvoie `201` avec `CategoryResource`.
 
+Payload attendu :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `name` | `string` | Oui | nom de la catégorie |
+| `description` | `string|null` | Non | description |
+| `slug` | `string` | Oui | identifiant public de la catégorie |
+| `status` | `string` | Oui | `active` ou `inactive` |
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "11111111-2222-3333-4444-555555666666",
+  "name": "Accessoires",
+  "slug": "accessoires",
+  "description": "Produits complémentaires",
+  "status": "active",
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
+
 `PUT /categories/{uuid}` accepte `UpdateCategoryRequest`, vérifie la policy,
 met à jour la catégorie et renvoie `CategoryResource`.
+
+Payload attendu : identique à `POST /categories` (champs modifiables).
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "11111111-2222-3333-4444-555555666666",
+  "name": "Nouveaux accessoires",
+  "slug": "nouveaux-accessoires",
+  "description": "Nouvelle description",
+  "status": "active",
+  "updatedAt": "2026-09-30T12:05:00Z"
+}
+```
 
 `DELETE /categories/{uuid}` vérifie la policy puis supprime la catégorie. La
 suppression échoue si les règles métier empêchent de supprimer une catégorie
 encore utilisée.
+
+Payload : aucun.
+
+Réponse attendue : `204` ou `200` selon la stratégie de suppression, avec éventuellement un message :
+
+```json
+{
+  "message": "Category deleted successfully"
+}
+```
 
 ### Catalogue : produits et variantes
 
@@ -162,19 +453,137 @@ encore utilisée.
 - `category_id` : entier positif ;
 - `search` : recherche textuelle sur le nom du produit.
 
-Les produits inactifs ne sont pas visibles publiquement. Les jokers SQL sont
-échappés dans la recherche.
+Exemple de réponse attendue :
+
+```json
+{
+  "data": [
+    {
+      "id": "22222222-3333-4444-5555-666666777777",
+      "name": "T-shirt Merch",
+      "slug": "t-shirt-merch",
+      "description": "T-shirt officiel",
+      "category": {
+        "id": "11111111-2222-3333-4444-555555666666",
+        "name": "Vêtements"
+      },
+      "status": "active",
+      "variants": [
+        {
+          "id": "33333333-4444-5555-6666-777777888888",
+          "sku": "TSHIRT-RED-M",
+          "size": "M",
+          "color": "red",
+          "price": 2500,
+          "stock": 12,
+          "isDefault": true,
+          "status": "active"
+        }
+      ]
+    }
+  ],
+  "links": {
+    "first": "...",
+    "last": "...",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "currentPage": 1,
+    "lastPage": 1,
+    "perPage": 15,
+    "total": 1
+  }
+}
+```
 
 `GET /products/{uuid}` retourne le produit avec sa catégorie et ses variantes
 publiques. `GET /products/{uuid}/variants` retourne uniquement les variantes
 publiques du produit.
 
+Exemple de réponse attendue pour `GET /products/{uuid}` :
+
+```json
+{
+  "id": "22222222-3333-4444-5555-666666777777",
+  "name": "T-shirt Merch",
+  "slug": "t-shirt-merch",
+  "description": "T-shirt officiel",
+  "category": {
+    "id": "11111111-2222-3333-4444-555555666666",
+    "name": "Vêtements"
+  },
+  "status": "active",
+  "variants": [
+    {
+      "id": "33333333-4444-5555-6666-777777888888",
+      "sku": "TSHIRT-RED-M",
+      "size": "M",
+      "color": "red",
+      "price": 2500,
+      "stock": 12,
+      "isDefault": true,
+      "status": "active"
+    }
+  ]
+}
+```
+
 `POST /products` et `PUT /products/{uuid}` utilisent respectivement
 `StoreProductRequest` et `UpdateProductRequest`. Le service gère le slug, la
 catégorie, les variantes, les prix en XOF, les SKU et la variante par défaut.
 
+Payload attendu :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `name` | `string` | Oui | nom du produit |
+| `description` | `string|null` | Non | description |
+| `slug` | `string` | Oui | identifiant public du produit |
+| `category_uuid` | `string` | Oui | UUID de la catégorie |
+| `status` | `string` | Oui | `active` ou `inactive` |
+| `variants` | `array<object>` | Oui | liste des variantes |
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "22222222-3333-4444-5555-666666777777",
+  "name": "T-shirt Merch",
+  "slug": "t-shirt-merch",
+  "description": "T-shirt officiel",
+  "category": {
+    "id": "11111111-2222-3333-4444-555555666666",
+    "name": "Vêtements"
+  },
+  "status": "active",
+  "variants": [
+    {
+      "id": "33333333-4444-5555-6666-777777888888",
+      "sku": "TSHIRT-RED-M",
+      "size": "M",
+      "color": "red",
+      "price": 2500,
+      "stock": 12,
+      "isDefault": true,
+      "status": "active"
+    }
+  ]
+}
+```
+
 `DELETE /products/{uuid}` vérifie la policy puis supprime le produit selon les
 règles de conservation des données et de ses variantes.
+
+Payload : aucun.
+
+Réponse attendue : `204` ou `200` selon la stratégie de suppression :
+
+```json
+{
+  "message": "Product deleted successfully"
+}
+```
 
 ### Commandes
 
@@ -198,9 +607,49 @@ invitée. Le service :
 5. crée les lignes et génère un numéro de commande unique ;
 6. émet un token d'accès uniquement pour une commande invitée.
 
+Payload attendu :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `items` | `array<object>` | Oui | lignes de commande |
+| `fulfillment_method` | `string` | Oui | `pickup` ou `delivery` |
+| `shipping_address` | `string|null` | Non | adresse de livraison si applicable |
+| `participant_id` | `string|null` | Non | identifiant participant pour un achat externe |
+
+Payload d'une ligne de commande :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `variant_uuid` | `string` | Oui | UUID de la variante |
+| `quantity` | `integer` | Oui | quantité commandée |
+| `unit_price` | `integer` | Non | prix unitaire calculé côté serveur |
+| `notes` | `string|null` | Non | commentaire libre |
+
 Réponse : `201` avec `OrderResource`. Le token invité n'est retourné qu'une
 seule fois dans cette réponse et doit être envoyé ensuite dans l'en-tête
 `X-Guest-Order-Token`.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "orderNumber": "ORD-20260930-0001",
+  "status": "pending_payment",
+  "fulfillmentMethod": "pickup",
+  "items": [
+    {
+      "variantId": "33333333-4444-5555-6666-777777888888",
+      "productName": "T-shirt Merch",
+      "quantity": 1,
+      "unitPrice": 2500,
+      "total": 2500
+    }
+  ],
+  "total": 2500,
+  "guestOrderToken": "secret-token-only-once"
+}
+```
 
 #### Lecture et filtrage
 
@@ -216,15 +665,78 @@ optionnel `status` accepte les valeurs suivantes :
 | 5 | Annulée |
 | 6 | Remboursée |
 
+Exemple de réponse attendue :
+
+```json
+{
+  "data": [
+    {
+      "id": "44444444-5555-6666-7777-888888999999",
+      "orderNumber": "ORD-20260930-0001",
+      "status": "pending_payment",
+      "fulfillmentMethod": "pickup",
+      "total": 2500,
+      "createdAt": "2026-09-30T12:00:00Z"
+    }
+  ],
+  "links": {
+    "first": "...",
+    "last": "...",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "currentPage": 1,
+    "lastPage": 1,
+    "perPage": 15,
+    "total": 1
+  }
+}
+```
+
 `GET /orders/{uuid}` accepte soit la session du propriétaire, soit le token
 d'une commande invitée. Une commande d'un autre compte ne peut pas être lue
 par cette voie.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "orderNumber": "ORD-20260930-0001",
+  "status": "pending_payment",
+  "fulfillmentMethod": "pickup",
+  "total": 2500,
+  "items": [
+    {
+      "variantId": "33333333-4444-5555-6666-777777888888",
+      "productName": "T-shirt Merch",
+      "quantity": 1,
+      "unitPrice": 2500,
+      "total": 2500
+    }
+  ],
+  "createdAt": "2026-09-30T12:00:00Z"
+}
+```
 
 #### Annulation
 
 `POST /orders/{uuid}/cancel` annule uniquement une commande encore annulable.
 La transition et la restitution du stock sont vérifiées dans la même
 transaction pour éviter une course avec un paiement.
+
+Payload : aucun.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "status": "cancelled",
+  "updatedAt": "2026-09-30T12:03:00Z"
+}
+```
 
 ### Retrait au guichet
 
@@ -239,19 +751,86 @@ transaction pour éviter une course avec un paiement.
 `GET /pickup/orders` retourne la file des commandes de retrait, paginée et
 triée de la plus récente à la plus ancienne.
 
+Exemple de réponse attendue :
+
+```json
+{
+  "data": [
+    {
+      "id": "44444444-5555-6666-7777-888888999999",
+      "orderNumber": "ORD-20260930-0001",
+      "status": "ready_for_pickup",
+      "customerName": "Jean Dupont",
+      "pickupToken": "abc123"
+    }
+  ],
+  "meta": {
+    "currentPage": 1,
+    "lastPage": 1,
+    "perPage": 15,
+    "total": 1
+  }
+}
+```
+
 `POST /pickup/scan` reçoit `payload` via `PickupScanRequest`. Le QR est résolu
 et vérifié avant toute écriture. Une commande inexistante retourne `404` ; une
 commande impayée, déjà retirée ou livrée retourne `409`.
 
+Payload attendu :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `payload` | `string` | Oui | contenu du QR lu au guichet |
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "orderNumber": "ORD-20260930-0001",
+  "status": "ready_for_pickup",
+  "pickedUp": false
+}
+```
+
 `POST /orders/{uuid}/ready` fait passer une commande payée à l'état prête au
 retrait.
+
+Payload : aucun.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "status": "ready_for_pickup",
+  "updatedAt": "2026-09-30T12:05:00Z"
+}
+```
 
 `POST /orders/{uuid}/picked-up` marque une commande servie comme retirée. Cette
 route permet un rattrapage manuel lorsque le scan est indisponible.
 
+Payload : aucun.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "status": "picked_up",
+  "updatedAt": "2026-09-30T12:06:00Z"
+}
+```
+
 `GET /orders/{uuid}/qr` renvoie une image PNG. Une commande invitée doit fournir
 `X-Guest-Order-Token`. La réponse utilise `Content-Type: image/png` et un cache
 privé court.
+
+Payload : aucun.
+
+Réponse attendue : `200` avec un binaire PNG ; aucun JSON n'est renvoyé en tant que tel.
 
 ### Webhooks de paiement
 
@@ -267,373 +846,38 @@ Les webhooks ne nécessitent pas de session. La signature du corps est vérifié
 avant la validation et avant toute écriture. Une notification signée et valide
 est rapprochée par `PaymentService`, qu'elle indique un succès ou un échec.
 
-La réponse `200` contient seulement `orderUuid`, `orderNumber` et `status`.
-Une signature invalide retourne `401`, un payload mal formé `422`, et un
-rapprochement impossible provoque une réponse non-2xx afin que l'opérateur
-réessaie.
+Payload attendu :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `event` | `string` | Oui | type d'événement fourni par le provider |
+| `transaction_id` | `string` | Oui | identifiant de transaction fournisseur |
+| `status` | `string` | Oui | statut final ou intermédiaire retourné par le provider |
+| `amount` | `integer` | Oui | montant payé en sous-unité |
+| `currency` | `string` | Oui | devise de paiement |
+| `signature` | `string` | Oui | signature vérifiée par le serveur |
+
+Réponse attendue : `200` avec un objet minimal de confirmation :
+
+```json
+{
+  "orderUuid": "44444444-5555-6666-7777-888888999999",
+  "orderNumber": "ORD-20260930-0001",
+  "status": "paid"
+}
+```
 
 ### Documentation OpenAPI
 
 | Méthode | Endpoint | Accès |
 |---|---|---|
-| GET | `/docs/api` | Local ou administrateur actif |
-| GET | `/docs/api.json` | Local ou administrateur actif |
+| GET | `/api/documentation` | Public |
+| GET | `/docs` | Public |
 
-Scramble génère la documentation à partir des routes, Form Requests et
-Resources. L'accès est refusé à un compte staff, car le document décrit aussi
-les opérations d'administration.
+Payload : aucun.
 
-## 3. Modèles Eloquent
+Réponse attendue : document OpenAPI JSON ou vue HTML de la documentation de l’API.
 
-Les modèles portent la structure, les relations, les casts et les scopes ; les
-règles de cas d'usage restent dans les services.
-
-### `User`
-
-Compte authentifiable, identifié publiquement par UUID. Champs sensibles
-`password` et `remember_token` masqués. Relations : `orders()`.
-
-Méthodes et scopes :
-
-- `orders()` : commandes du compte ;
-- `active()` : filtre les comptes actifs ;
-- `staff()` : filtre staff et administrateurs ;
-- `casts()` : convertit rôle et statut en enums, le mot de passe en hash et la
-  date de vérification en date.
-
-### `Category`
-
-Catégorie du catalogue, avec relation `products()`. Le scope `active()` limite
-le catalogue aux catégories actives. `casts()` convertit le statut en
-`CatalogStatus`.
-
-### `Product`
-
-Produit du catalogue, avec `category()` et `variants()`. Le scope `active()`
-retient les produits publiés. `casts()` convertit le statut en
-`CatalogStatus`.
-
-### `Variant`
-
-Déclinaison vendable d'un produit, par exemple une taille ou une couleur.
-Relations : `product()` et `orderItems()`.
-
-- `active()` : variantes actives ;
-- `inStock()` : variantes dont le stock est disponible ;
-- `isAvailable()` : attribut calculé de disponibilité ;
-- `casts()` : types de prix, stock et statut.
-
-### `Order`
-
-Commande d'un client ou commande invitée. Relations : `user()`, `items()`,
-`products()`, `invoice()` et `payments()`.
-
-- `isOwnedBy(?User $user)` : vérifie la propriété par session ;
-- `awaitingPayment()` : scope des commandes en attente de paiement ;
-- `forPickup()` : scope des commandes destinées au retrait ;
-- `isPickedUp()` : attribut calculé ;
-- `casts()` : statuts, méthode de livraison et dates.
-
-### `OrderItem`
-
-Ligne d'une commande. Relations : `order()`, `product()` et `variant()`.
-`casts()` convertit les quantités, prix et totaux vers leurs types applicatifs.
-
-### `Payment`
-
-Tentative de paiement rattachée à une commande par `order()`.
-
-- `successful()` : scope des paiements confirmés ;
-- `isPaid()` : indique si le paiement est finalisé avec succès ;
-- `casts()` : méthode, fournisseur et statut en enums.
-
-### `Invoice`
-
-Facture associée à une commande par `order()`. `casts()` convertit les montants
-et dates utiles à la facturation.
-
-## 4. Enums métier
-
-- `CatalogStatus` : `INACTIVE = 0`, `ACTIVE = 1`.
-- `FulfillmentMethod` : `pickup`, `delivery` ; `requiresPickupQrCode()` indique
-  si un QR de retrait est nécessaire.
-- `OrderStatus` : `PENDING_PAYMENT = 1`, `PAID = 2`, `READY_FOR_PICKUP = 3`,
-  `PICKED_UP = 4`, `CANCELLED = 5`, `REFUNDED = 6` ; `isSettled()` indique un
-  état financier réglé.
-- `PaymentMethod` : `mobile_money`, `card`.
-- `PaymentProvider` : `fedapay`, `kkiapay`, `paygate`, `flooz`, `tmoney`.
-- `PaymentStatus` : `PENDING = 1`, `SUCCESS = 2`, `FAILED = 3`, `REFUNDED = 4` ;
-  `isFinal()` indique qu'aucune nouvelle tentative ne doit modifier le statut.
-- `PickupStatus` : `pending`, `picked_up`, `cancelled`.
-- `UserRole` : `customer`, `staff`, `admin` ; `canOperateMerch()` indique si le
-  compte peut opérer le guichet.
-- `UserStatus` : `INACTIVE = 0`, `ACTIVE = 1` ; `isActive()` indique si le
-  compte peut se connecter et agir.
-
-## 5. Contrôleurs
-
-Les contrôleurs traduisent HTTP vers les services : ils valident l'entrée via
-un Form Request, autorisent l'action avec une policy et sérialisent la sortie
-via une Resource.
-
-### `ApiController`
-
-Base commune des contrôleurs API.
-
-- `perPage(Request)` : lit `per_page` et applique les bornes de configuration ;
-- `jsonResource(JsonResource, status)` : force le statut HTTP tout en gardant
-  la normalisation des ressources.
-
-### `HealthController`
-
-`__invoke(SystemHealthService)` expose la readiness de l'application.
-
-### `AuthController`
-
-Injecte `AuthService` et expose `csrfToken`, `register`, `login`, `logout` et
-`me`. Il ne renvoie jamais de token bearer.
-
-### `CategoryController`
-
-Injecte `CategoryService`. `index` et `show` lisent le catalogue ; `store`,
-`update` et `destroy` sont réservées à l'administration.
-
-### `ProductController`
-
-Injecte `ProductService`. `index` filtre et pagine le catalogue ; `show` et
-`variants` exposent le détail ; `store`, `update` et `destroy` administrent les
-produits. `filterCategoryId` et `filterSearch` normalisent les filtres HTTP.
-
-### `OrderController`
-
-Injecte `OrderService` et `OrderAccess`. `store`, `index`, `show` et `cancel`
-gèrent le parcours client. `authorizeRead` choisit entre session et token
-invité ; `filterStatus` transforme et valide le filtre de statut.
-
-### `OrderPickupController`
-
-Injecte `OrderService`, `PickupQrCodeService` et `OrderAccess`. Il expose la
-file de retrait, le passage à `ready`, le scan, le retrait manuel et le rendu
-PNG du QR.
-
-### `PaymentWebhookController`
-
-Injecte `PaymentService` et `WebhookSignatureVerifier`. `handle` vérifie la
-signature, transforme le statut opérateur en enum et délègue le rapprochement.
-
-## 6. Services métier
-
-Les services contiennent les cas d'usage et les transactions. Ils ne
-construisent pas de réponse HTTP et dépendent des interfaces de repositories.
-
-### `SystemHealthService`
-
-- `readiness()` : agrège l'état de l'application et de la base ;
-- `databaseIsReachable()` : vérifie la connexion via le repository santé.
-
-### `AuthService`
-
-- `register(Request, array)` : crée un client actif, hache le mot de passe et
-  ouvre la session ;
-- `attempt(Request, email, password, remember)` : vérifie les identifiants,
-  protège contre l'énumération et ouvre la session ;
-- `logout(Request)` : invalide la session et journalise l'événement.
-
-Les méthodes privées ouvrent la session, égalisent le coût de vérification avec
-un hash factice et journalisent les tentatives d'authentification.
-
-### `CategoryService`
-
-- `listCatalog(perPage)` : pagination des catégories publiques ;
-- `findOrFail(uuid)` : recherche publique ;
-- `findForManagementOrFail(uuid)` : recherche incluant les données de gestion ;
-- `create(data)` : crée une catégorie avec slug résolu ;
-- `update(category, data)` : met à jour les données et le slug ;
-- `delete(category)` : supprime la catégorie selon les contraintes métier.
-
-### `ProductService`
-
-- `listCatalog(perPage, filters)` : liste les produits visibles avec filtres ;
-- `findOrFail(uuid)` : charge un produit public avec ses relations ;
-- `findForManagementOrFail(uuid)` : charge un produit pour l'administration ;
-- `listVariants(product)` : liste les variantes publiques ;
-- `create(data)` : crée un produit, son slug et ses variantes ;
-- `update(product, data)` : met à jour le produit et synchronise ses variantes ;
-- `delete(product)` : supprime le produit selon les règles métier.
-
-Les helpers internes gèrent les prix en montant entier, les SKU, les variantes
-par défaut, la catégorie et l'unicité des slugs.
-
-### `OrderService`
-
-- `create(data)` : crée une commande transactionnelle et réserve le stock ;
-- `listForUser(user, perPage, status)` : liste uniquement les commandes du
-  compte ;
-- `listForPickup(perPage)` : construit la file de retrait ;
-- `findOrFail(id)` : charge une commande avec ses relations ;
-- `cancel(order)` : annule et restitue le stock ;
-- `markPaid(order)` : passe la commande au statut payé ;
-- `markReadyForPickup(order)` : la rend prête au guichet ;
-- `markPickedUp(order)` : enregistre le retrait ;
-- `refund(order)` : gère le remboursement et ses transitions ;
-- `canTransition(order, target)` : teste une transition ;
-- `assertCanTransition(order, target)` : refuse une transition invalide ;
-- `allowedTransitions(order)` : retourne les transitions permises.
-
-Les helpers privés verrouillent les variantes, calculent les lignes, contrôlent
-le stock, créent les lignes, libèrent le stock et garantissent l'unicité du
-numéro de commande.
-
-### `PaymentService`
-
-- `handleNotification(notification)` : rapproche une notification opérateur,
-  crée ou retrouve la tentative de paiement et fait évoluer la commande ;
-- `confirm(payment)` : confirme le paiement et ses effets ;
-- `reject(payment, reason)` : enregistre un paiement refusé ;
-- `attachTransaction(payment, notification)` : rattache la référence opérateur ;
-- `outstandingAmount(order)` : calcule le montant restant à payer.
-
-### `InvoiceService`
-
-- `issueFor(order)` : émet une facture unique pour une commande ;
-- `generateInvoiceNumber(order)` : produit une référence de facture unique.
-
-### `PickupQrCodeService`
-
-- `grant(order)` : accorde un droit de retrait et son secret ;
-- `hasPickupRight(order)` : indique si la commande dispose de ce droit ;
-- `renderPng(order)` : fabrique le QR en PNG ;
-- `encodePayload(order)` : encode le contenu du QR ;
-- `resolveOrder(token)` : retrouve une commande depuis un token ;
-- `resolveOrderFromPayload(payload)` : retrouve une commande depuis un scan ;
-- `assertServable(order)` : vérifie qu'une commande peut être servie.
-
-## 7. Repositories
-
-Les repositories isolent Eloquent des services. Les contrats se trouvent dans
-`app/Repositories/Contracts` et leurs implémentations dans
-`app/Repositories/Eloquent`. Les liaisons interface -> implémentation sont
-déclarées dans `AppServiceProvider`.
-
-### Contrat générique
-
-`RepositoryInterface` définit `query`, `find`, `findOrFail`, `all`, `paginate`,
-`create`, `update` et `delete`.
-
-`EloquentRepository` implémente ces opérations, utilise la clé de route du
-modèle et ne porte aucune règle métier.
-
-### Repositories spécialisés
-
-- `HealthRepositoryInterface` / `EloquentHealthRepository` :
-  `pingDatabase()` vérifie la disponibilité de la base.
-- `UserRepositoryInterface` / `EloquentUserRepository` :
-  `findByEmail(email)` retrouve un compte pour la connexion.
-- `CategoryRepositoryInterface` / `EloquentCategoryRepository` :
-  `findBySlug`, `findById`, `findForCatalog`, `findForManagement`,
-  `paginateForCatalog` et `slugExists`.
-- `ProductRepositoryInterface` / `EloquentProductRepository` :
-  `findWithRelations`, `findForCatalog`, `paginateForCatalog`, `findBySlug`,
-  `slugExists` et `countActiveByCategory`.
-- `VariantRepositoryInterface` / `EloquentVariantRepository` :
-  `forProduct`, `forPublicCatalog`, `findForProduct`, `findBySku`,
-  `findTrashedForProductBySku`, `deleteAllForProduct`, `lockForSale` et
-  `restock`.
-- `OrderRepositoryInterface` / `EloquentOrderRepository` :
-  `findWithRelations`, `paginateForUser`, `paginateForPickup`,
-  `findByPickupTokenHash` et `orderNumberExists`.
-- `PaymentRepositoryInterface` / `EloquentPaymentRepository` :
-  `findWithOrder`, `findByTransactionId`, `forOrder`, `attachTransactionId` et
-  `settledAmount`.
-- `InvoiceRepositoryInterface` / `EloquentInvoiceRepository` :
-  `findForOrder` et `invoiceNumberExists`.
-
-## 8. Validation, resources et sécurité transverses
-
-### Form Requests
-
-`ApiRequest` transforme toute erreur de validation en réponse JSON `422` et
-expose `body()` pour fournir au contrôleur le payload validé.
-
-Les classes `LoginRequest`, `RegisterRequest`, `StoreCategoryRequest`,
-`UpdateCategoryRequest`, `StoreProductRequest`, `UpdateProductRequest`,
-`StoreOrderRequest`, `PickupScanRequest` et
-`PaymentNotificationRequest` définissent les autorisations et règles d'entrée.
-`ProductPayloadRules` partage les règles des produits et vérifie la cohérence
-des variantes.
-
-### Resources
-
-`ApiResource` et `ApiResourceCollection` constituent la base de sérialisation.
-`NormalizesResponseKeys` convertit les clés de sortie en camelCase.
-
-Les resources disponibles sont `HealthResource`, `UserResource`,
-`CategoryResource`, `ProductResource`, `VariantResource`, `OrderResource`,
-`OrderItemResource`, `PaymentResource` et `InvoiceResource`.
-`OrderResource` conditionne les données selon l'accès du lecteur et peut
-ajouter temporairement le token invité lors de la création.
-
-### Policies
-
-- `CategoryPolicy` et `ProductPolicy` délèguent la gestion du catalogue au
-  comportement commun `ManagesCatalog` et la réservent à l'administrateur.
-- `OrderPolicy` contrôle la lecture par propriétaire, l'annulation et les
-  opérations du guichet.
-
-### Support
-
-- `ApiErrorResponder` : enveloppe uniforme des erreurs API ;
-- `CamelCase` : conversion unique des clés JSON ;
-- `Money` : normalisation des montants ;
-- `OrderAccess` : émission et vérification du token de commande invitée ;
-- `WebhookSignatureVerifier` : validation des signatures de paiement ;
-- `PriceInXof` : règle de validation des prix en francs CFA.
-
-### Rate limiting
-
-`AppServiceProvider` configure les limiteurs `api`, `login`, `register`,
-`checkout` et `webhook`. L'API générale distingue l'adresse IP du compte
-connecté ; les flux sensibles ont des limites spécifiques.
-
-## 9. Flux principaux
-
-### Client connecté
-
-```text
-GET csrf-token
-  -> POST register ou login
-  -> GET products / categories
-  -> POST orders
-  -> GET orders/{uuid}
-  -> paiement via webhook opérateur
-  -> retrait du QR au guichet
-```
-
-### Client invité
-
-```text
-GET csrf-token
-  -> POST orders
-  -> conserver X-Guest-Order-Token
-  -> GET orders/{uuid} avec l'en-tête
-  -> GET orders/{uuid}/qr avec l'en-tête
-```
-
-### Guichet
-
-```text
-GET pickup/orders
-  -> POST orders/{uuid}/ready
-  -> POST pickup/scan
-  -> POST orders/{uuid}/picked-up
-```
-
-### Opérateur de paiement
-
-```text
-POST payments/webhooks/{provider}
-  -> vérification de signature
-  -> validation du payload
-  -> rapprochement idempotent du paiement
-  -> évolution de la commande
-```
+L5-Swagger génère la documentation à partir des attributs OpenAPI de
+`app/OpenApi/OpenApiSpec.php`. La documentation est publique et ne nécessite
+pas de session.

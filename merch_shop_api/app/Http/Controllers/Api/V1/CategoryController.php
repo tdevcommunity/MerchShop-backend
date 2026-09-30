@@ -8,8 +8,6 @@ use App\Http\Requests\Api\V1\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use App\Services\CategoryService;
-use Dedoc\Scramble\Attributes\QueryParameter;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -29,17 +27,6 @@ final class CategoryController extends ApiController
     /**
      * Liste paginee des categories actives.
      */
-    #[QueryParameter(
-        name: 'per_page',
-        type: 'integer',
-        description: 'Nombre d\'éléments par page. La valeur est bornée entre 1 et le maximum de configuration ; une valeur hors-borne est ramenée à la borne plutôt que refusée.',
-        example: 24,
-    )]
-    #[OpenApiResponse(
-        status: 200,
-        description: 'Page de catégories actives.',
-        type: 'array{data: array<int, \App\Http\Resources\CategoryResource>, links: array{first: string|null, last: string|null, prev: string|null, next: string|null}, meta: array{currentPage: int, from: int|null, lastPage: int, path: string, perPage: int, to: int|null, total: int, links: array<int, array{url: string|null, label: string, page: int|null, active: bool}>}}',
-    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         return CategoryResource::collection(

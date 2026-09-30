@@ -21,9 +21,25 @@ __pycache__/
 /public/hot
 /public/storage
 /storage/*.key
+/storage/api-docs
 /storage/pail
 /vendor
 _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Laravel AI agent context and skill metadata
+/.agents
+/.agents/**
+/.claude
+/.claude/**
+/AGENTS.md
+/CLAUDE.md
+**/AGENTS.md
+**/CLAUDE.md
+**/.agents/skills/**
+**/.claude/skills/**
+**/skills/**
+**/SKILL.md
+**/SKILL.blade.php

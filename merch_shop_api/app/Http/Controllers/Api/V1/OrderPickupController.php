@@ -9,8 +9,6 @@ use App\Models\Order;
 use App\Services\OrderService;
 use App\Services\PickupQrCodeService;
 use App\Support\Orders\OrderAccess;
-use Dedoc\Scramble\Attributes\HeaderParameter;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
@@ -37,11 +35,6 @@ final class OrderPickupController extends ApiController
      * Les commandes livrees n'y apparaissent pas : elles n'ont pas de QR, donc
      * aucun guichetier ne peut les servir par un scan.
      */
-    #[OpenApiResponse(
-        status: 200,
-        description: 'Page des commandes de retrait, de la plus recente a la plus ancienne.',
-        type: 'array{data: array<int, \App\Http\Resources\OrderResource>, links: array{first: string|null, last: string|null, prev: string|null, next: string|null}, meta: array{currentPage: int, from: int|null, lastPage: int, path: string, perPage: int, to: int|null, total: int, links: array<int, array{url: string|null, label: string, page: int|null, active: bool}>}}',
-    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('useCounter', Order::class);
@@ -72,9 +65,6 @@ final class OrderPickupController extends ApiController
      * Le QR est verifie avant toute ecriture : un contenu fabrique a la main,
      * ou le QR d'une commande deja servie, est refuse sans toucher a la base.
      */
-    #[OpenApiResponse(status: 200, description: 'Commande servie.')]
-    #[OpenApiResponse(status: 404, description: 'Aucun QR ne correspond a une commande de retrait.')]
-    #[OpenApiResponse(status: 409, description: 'Commande trouvee mais non servable : deja retiree, impayee, ou livree.')]
     public function scan(PickupScanRequest $request): OrderResource
     {
         $this->authorize('useCounter', Order::class);
@@ -115,16 +105,6 @@ final class OrderPickupController extends ApiController
      * present au guichet n'a pas ce probleme, puisque le guichetier lit la
      * commande dans sa file.
      */
-    #[HeaderParameter(
-        name: OrderAccess::HEADER,
-        type: 'string',
-        required: false,
-        description: 'Jeton d\'acces d\'une commande invitee. Permet a un client sans compte d\'afficher son QR avant de venir au stand.',
-        example: '9f2c1d0b7a4e6f8c5b3d2a1908e7f6c5d4b3a2918e7f6c5d4b3a29180e7f6c5d',
-    )]
-    #[OpenApiResponse(status: 200, description: 'Image PNG du QR de retrait.')]
-    #[OpenApiResponse(status: 403, description: 'Ni la session ni le jeton ne permettent de lire cette commande.')]
-    #[OpenApiResponse(status: 409, description: 'La commande n\'a pas de QR : elle n\'est pas encore payee, ou a deja ete retiree.')]
     public function qrCode(Request $request, string $uuid): Response
     {
         $order = $this->orders->findOrFail($uuid);

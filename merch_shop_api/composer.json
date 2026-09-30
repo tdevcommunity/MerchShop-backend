@@ -16,7 +16,7 @@
         "php": "^8.3"
     },
     "require-dev": {
-        "dedoc/scramble": "^0.13.46",
+        "darkaonline/l5-swagger": "^11.1",
         "fakerphp/faker": "^1.23",
         "laravel/boost": "^2.10",
         "laravel/pail": "^1.2.5",

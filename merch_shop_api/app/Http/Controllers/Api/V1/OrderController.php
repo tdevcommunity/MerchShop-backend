@@ -10,9 +10,6 @@ use App\Http\Resources\OrderResource;
 use App\Models\Order;
 use App\Services\OrderService;
 use App\Support\Orders\OrderAccess;
-use Dedoc\Scramble\Attributes\HeaderParameter;
-use Dedoc\Scramble\Attributes\QueryParameter;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -41,17 +38,6 @@ final class OrderController extends ApiController
      * service, et non dans le controleur, pour que la meme requete SQL reste
      * la seule voie d'acces aux commandes d'un client.
      */
-    #[QueryParameter(
-        name: 'status',
-        type: 'integer',
-        description: 'Restreint la liste a un statut de commande. La valeur est l\'entier expose par `data.status` (1 en attente de paiement, 2 payee, 3 prete au retrait, 4 retiree, 5 annulee, 6-remboursee). Une valeur inconnue est refusee par un 422 `INVALID_FILTER` plutot que d\'etre ignoree : un front ne doit pas croire avoir filtre alors que la liste est complete.',
-        example: 2,
-    )]
-    #[OpenApiResponse(
-        status: 200,
-        description: 'Page des commandes du client connecte.',
-        type: 'array{data: array<int, \App\Http\Resources\OrderResource>, links: array{first: string|null, last: string|null, prev: string|null, next: string|null}, meta: array{currentPage: int, from: int|null, lastPage: int, path: string, perPage: int, to: int|null, total: int, links: array<int, array{url: string|null, label: string, page: int|null, active: bool}>}}',
-    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         return OrderResource::collection(
@@ -71,22 +57,6 @@ final class OrderController extends ApiController
      * jeton n'ouvre rien sur une commande rattachee a un compte — et c'est
      * pourquoi la policy n'a pas besoin de connaitre le jeton.
      */
-    #[HeaderParameter(
-        name: OrderAccess::HEADER,
-        type: 'string',
-        required: false,
-        description: 'Jeton d\'acces d\'une commande invitee, renvoye une seule fois par `POST /orders`. A presenter en plus d\'une session pour lire la commande qui l\'a emis, et son QR de retrait. Un jeton n\'ouvre rien sur une commande rattachee a un compte : un client connecte est juge par sa session.',
-        example: '9f2c1d0b7a4e6f8c5b3d2a1908e7f6c5d4b3a2918e7f6c5d4b3a29180e7f6c5d',
-    )]
-    #[OpenApiResponse(
-        status: 200,
-        description: 'Commande, avec le contenu de son QR de retrait s\'il en existe un.',
-        type: OrderResource::class,
-    )]
-    #[OpenApiResponse(
-        status: 403,
-        description: 'Ni la session ni le jeton ne permettent de lire cette commande.',
-    )]
     public function show(Request $request, string $uuid): OrderResource
     {
         $order = $this->orders->findOrFail($uuid);

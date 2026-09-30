@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Enums\UserRole;
 use App\Models\User;
-use App\OpenApi\CamelCasesResourceProperties;
 use App\Repositories\Contracts\CategoryRepositoryInterface;
 use App\Repositories\Contracts\HealthRepositoryInterface;
 use App\Repositories\Contracts\InvoiceRepositoryInterface;
@@ -21,7 +20,6 @@ use App\Repositories\Eloquent\EloquentPaymentRepository;
 use App\Repositories\Eloquent\EloquentProductRepository;
 use App\Repositories\Eloquent\EloquentUserRepository;
 use App\Repositories\Eloquent\EloquentVariantRepository;
-use Dedoc\Scramble\Scramble;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -61,24 +59,6 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureRateLimiting();
         $this->configureApiDocsAccess();
-        $this->configureOpenApiGeneration();
-    }
-
-    /**
-     * Aligne la spécification générée sur le JSON réellement renvoyé.
-     *
-     * La conversion camelCase des réponses est appliquée à la sérialisation par
-     * le trait NormalizesResponseKeys, donc après l'analyse statique des
-     * ressources : sans ce correctif, la spécification décrirait les clés
-     * internes en snake_case, et un client généré chercherait des champs que
-     * l'API n'envoie pas.
-     */
-    private function configureOpenApiGeneration(): void
-    {
-        Scramble::configure()
-            ->withDocumentTransformers([
-                new CamelCasesResourceProperties,
-            ]);
     }
 
     /**

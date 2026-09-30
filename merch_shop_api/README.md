@@ -38,31 +38,30 @@ php artisan route:list --path=api
 # Suite de tests
 php artisan test
 
+# Données locales de démonstration
+php artisan db:seed
+
 # Style de code
 ./vendor/bin/pint
 
-# Documentation OpenAPI : régénère l'export et purge le cache
-php artisan scramble:export
-php artisan scramble:clear
+# Documentation OpenAPI : régénère l'export L5-Swagger
+php artisan l5-swagger:generate
 ```
 
 ### Documentation de l'API
 
-La spécification OpenAPI est générée à partir du code (routes, `FormRequest`,
-`JsonResource`) par [Scramble](https://scramble.dedoc.co), sans fichier
-écrit à la main : la documentation ne peut pas diverger des contrôleurs.
+La spécification OpenAPI est générée par
+[L5-Swagger](https://github.com/DarkaOnLine/L5-Swagger) depuis les attributs
+OpenAPI déclarés dans `app/OpenApi/OpenApiSpec.php`.
 
 | Ressource | Accès |
 |---|---|
-| `/docs/api` | interface Swagger, en lecture seule sur l'API |
-| `/docs/api.json` | document OpenAPI 3.1, à consommer par les clients générés |
-| `api.json` | export versionné dans le dépôt, pour les intégrations hors PHP |
+| `/api/documentation` | interface Swagger, en lecture seule sur l'API |
+| `/docs` | document OpenAPI JSON, à consommer par les clients générés |
+| `storage/api-docs/api-docs.json` | export généré localement |
 
-L'accès à la documentation est restreint : environnement `local`, ou session
-d'un administrateur **actif**. Un `staff` en est exclu, car la spécification
-décrit les routes d'écriture du back-office et leurs contraintes — la lire doit
-exiger le même pouvoir que les appeler. La règle vit dans
-`AppServiceProvider::configureApiDocsAccess()` et est couverte par
+L'accès à la documentation est public et ne nécessite pas de session. Cette
+règle est couverte par
 `tests/Feature/Api/ApiDocumentationAccessTest.php`.
 
 L'authentification est par cookie de session : la spécification déclare un
@@ -75,12 +74,8 @@ Le contrat de nommage est asymétrique et la génération en tient compte :
 - les **réponses** sont converties en `camelCase` à la sérialisation
   (`productsCount`), par le trait `NormalizesResponseKeys`.
 
-Cette conversion est invisible de l'analyse statique des ressources, qui
-produirait donc des schémas décrivant un payload que l'API n'émet jamais.
-`App\OpenApi\CamelCasesResourceProperties` réapplique donc la même règle en fin
-de génération, en s'appuyant sur `App\Support\Api\CamelCase::key()` — une
-seule implémentation de la conversion, partagée entre le JSON et sa
-description.
+Les schémas publics sont centralisés dans `App\OpenApi\OpenApiSpec` et les
+tests vérifient la présence des principaux chemins générés.
 
 ### Configuration
 

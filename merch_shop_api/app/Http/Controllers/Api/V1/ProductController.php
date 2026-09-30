@@ -10,8 +10,6 @@ use App\Http\Resources\ProductResource;
 use App\Http\Resources\VariantResource;
 use App\Models\Product;
 use App\Services\ProductService;
-use Dedoc\Scramble\Attributes\QueryParameter;
-use Dedoc\Scramble\Attributes\Response as OpenApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -40,29 +38,6 @@ final class ProductController extends ApiController
      * méthodes privées de filtre : la génération ne lit que l'action de route,
      * un attribut posé plus bas ne serait jamais collecté.
      */
-    #[QueryParameter(
-        name: 'per_page',
-        type: 'integer',
-        description: 'Nombre d\'éléments par page. La valeur est bornée entre 1 et le maximum de configuration ; une valeur hors-borne est ramenée à la borne plutôt que refusée.',
-        example: 24,
-    )]
-    #[QueryParameter(
-        name: 'category_id',
-        type: 'integer',
-        description: 'Restreint la liste à une catégorie. Une valeur non entière ou négative est refusée par un 422 `INVALID_FILTER`.',
-        example: 3,
-    )]
-    #[QueryParameter(
-        name: 'search',
-        type: 'string',
-        description: 'Terme de recherche porté sur le nom du produit. Un joker SQL envoyé par le client est traité comme un caractère littéral, et une valeur non textuelle est ignorée.',
-        example: 't-shirt',
-    )]
-    #[OpenApiResponse(
-        status: 200,
-        description: 'Page de produits actifs.',
-        type: 'array{data: array<int, \App\Http\Resources\ProductResource>, links: array{first: string|null, last: string|null, prev: string|null, next: string|null}, meta: array{currentPage: int, from: int|null, lastPage: int, path: string, perPage: int, to: int|null, total: int, links: array<int, array{url: string|null, label: string, page: int|null, active: bool}>}}',
-    )]
     public function index(Request $request): AnonymousResourceCollection
     {
         return ProductResource::collection(

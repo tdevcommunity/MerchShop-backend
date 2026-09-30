@@ -18,50 +18,57 @@ class ApiDocumentationAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_an_unauthenticated_api_request_returns_json_instead_of_redirecting(): void
+    {
+        $this->getJson('/api/v1/orders')
+            ->assertUnauthorized()
+            ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+    }
+
     /**
      * Les tests tournent en environnement `testing`, pas `local` : le
      * court-circuit d'environnement local du middleware ne doit donc pas
      * masquer une régression du gate.
      */
-    public function test_it_refuses_the_documentation_to_a_guest(): void
+    public function test_it_opens_the_documentation_to_a_guest(): void
     {
-        $this->get('/docs/api')->assertForbidden();
-        $this->get('/docs/api.json')->assertForbidden();
+        $this->get('/api/documentation')->assertOk();
+        $this->get('/docs')->assertOk();
     }
 
-    public function test_it_refuses_the_documentation_to_a_customer(): void
+    public function test_it_opens_the_documentation_to_a_customer(): void
     {
         $this->actingAs(User::factory()->create())
-            ->get('/docs/api')
-            ->assertForbidden();
+            ->get('/api/documentation')
+            ->assertOk();
     }
 
-    public function test_it_refuses_the_documentation_to_a_staff_member(): void
+    public function test_it_opens_the_documentation_to_a_staff_member(): void
     {
         $this->actingAs(User::factory()->staff()->create())
-            ->get('/docs/api')
-            ->assertForbidden();
+            ->get('/api/documentation')
+            ->assertOk();
     }
 
-    public function test_it_refuses_the_documentation_to_a_suspended_admin(): void
+    public function test_it_opens_the_documentation_to_a_suspended_admin(): void
     {
         $this->actingAs(User::factory()->admin()->inactive()->create())
-            ->get('/docs/api')
-            ->assertForbidden();
+            ->get('/api/documentation')
+            ->assertOk();
     }
 
     public function test_it_opens_the_ui_to_an_active_admin(): void
     {
         $this->actingAs(User::factory()->admin()->create())
-            ->get('/docs/api')
+            ->get('/api/documentation')
             ->assertOk();
     }
 
     public function test_it_serves_the_openapi_document_to_an_active_admin(): void
     {
         $this->actingAs(User::factory()->admin()->create())
-            ->get('/docs/api.json')
+            ->get('/docs')
             ->assertOk()
-            ->assertJsonPath('openapi', '3.1.0');
+            ->assertJsonPath('openapi', '3.0.0');
     }
 }
