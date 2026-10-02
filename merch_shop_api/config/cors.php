@@ -38,6 +38,8 @@ return [
         'X-Requested-With',
         'X-Request-Id',
         'X-XSRF-TOKEN',
+        'X-CSRF-TOKEN',
+        'X-Order-Token',
     ],
 
     'exposed_headers' => ['X-Request-Id', 'XSRF-TOKEN'],
