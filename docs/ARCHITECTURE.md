@@ -90,9 +90,16 @@ merch_shop_api/
 │   │   ├── Contracts/                   interfaces (dépendances des services)
 │   │   └── Eloquent/                    implémentations
 │   ├── Services/                        cas d'usage
-│   └── Support/Api/                     transverse : enveloppe d'erreur, camelCase
+│   │   └── Payments/                    passerelles de paiement (contrat, registre,
+│   │                                    FedaPay, lecture d'événement, checkout)
+│   ├── Support/
+│   │   ├── Api/                         transverse : enveloppe d'erreur, camelCase
+│   │   ├── Orders/                      accès aux commandes invitées
+│   │   └── Payments/                    vérification de signature opérateur
 ├── config/api.php                       version, pagination, quota de débit
 ├── config/cors.php                      origines autorisées (variables d'env)
+├── config/orders.php                    règles de commande, secrets et tolérances de webhook
+├── config/payments.php                  agrégateur par défaut, adresse de retour
 ├── config/scramble.php                  génération OpenAPI, sécurité, accès UI
 ├── api.json                             export OpenAPI versionné
 └── routes/api.php                       point d'entrée, groupes de version
@@ -313,9 +320,32 @@ n'est acceptée que si elle prouve qu'elle connaît le jeton.
 | Quotas | `throttle:login` et `throttle:register`, distincts du quota `api` |
 
 Configuration : `SESSION_DRIVER`, `SESSION_SECURE_COOKIE`, `SESSION_SAME_SITE`,
-`CORS_ALLOWED_ORIGINS`, `CORS_SUPPORTS_CREDENTIALS` (voir `.env.example`).
+`CORS_ALLOWED_ORIGINS`, `CORS_SUPPORTS_CREDENTIALS`.
 `CORS_ALLOWED_ORIGINS` doit lister les origines explicitement — `*` est refusé
 car il est incompatible avec l'envoi de cookies.
+
+> `.env.example` est couvert par `.gitignore` (motif `.env*`) et n'est donc pas
+> versionné : les variables d'environnement qui configurent le paiement sont
+> documentées ci-dessous plutôt que dans ce fichier, sans quoi elles
+> n'existeraient que sur la machine de celui qui les a écrites.
+
+### Variables de paiement
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `PAYMENT_PROVIDER` | Agrégateur qui encaisse, parmi ceux du `PaymentGatewayRegistry` | `fedapay` |
+| `PAYMENT_CALLBACK_URL` | Adresse de retour de l'acheteur après règlement. Absente, `POST /orders/{uuid}/payment` répond `503` : mieux vaut refuser d'ouvrir un paiement que de renvoyer l'acheteur nulle part | aucune |
+| `FEDAPAY_SECRET_KEY` | Clé d'API FedaPay, propre à l'environnement | aucune |
+| `FEDAPAY_ENVIRONMENT` | `sandbox`, `test`, `development`, `production`. Une valeur hors de cette liste ferme la route plutôt que d'appeler une adresse vide | `sandbox` |
+| `PAYMENT_WEBHOOK_SECRET_FEDAPAY` | Secret du tableau de bord FedaPay, qui signe les notifications. **Différent de la clé d'API** | aucune |
+| `FEDAPAY_WEBHOOK_TOLERANCE` | Fenêtre de rejeu, en secondes | `300` |
+| `PAYMENT_WEBHOOK_SECRET_<AGRÉGATEUR>` | Secret des agrégateurs génériques, pour la signature HMAC du corps | aucune |
+| `API_THROTTLE_PAYMENT_PER_MINUTE` | Quota d'ouverture de paiement | `10` |
+
+Aucune de ces valeurs n'est un secret de session : elles ne sont pas dans
+`config/session.php` et ne transitent pas par le cookie. Elles sont lues au
+moment de l'appel, jamais mises en cache, ce qui permet à un worker long-lived
+de refléter la configuration en cours.
 
 ### 7.1 Commande invitée : un jeton d'accès, pas une session
 
@@ -334,7 +364,7 @@ d'ouvrir.
 | Entropie | 32 octets aléatoires (`Str::random`) | un jeton calculé depuis l'uuid de la commande serait recalculable par quiconque connaît cet uuid |
 | Stockage | empreinte SHA-256 seule | une fuite de la base ne doit pas suffire à lire une commande |
 | Présentation | renvoyé une seule fois, via la ressource | il n'est pas dans le modèle, donc ne ressort pas sur les lectures suivantes |
-| Usage | en-tête `X-Order-Token` sur `GET /orders/{uuid}` et `GET /orders/{uuid}/qr` | il ouvre la lecture, rien d'autre |
+| Usage | en-tête `X-Order-Token` sur `GET /orders/{uuid}`, `GET /orders/{uuid}/qr` et `POST /orders/{uuid}/payment` | il ouvre la lecture, et l'acte de payer qu'elle rend possible ; rien d'autre |
 | Portée | la commande visée par l'uuid de l'URL | l'empreinte comparée est celle de cette commande, pas celle de l'ordre de la requête |
 | Fin de validité | le jour où la commande est rattachée à un compte | un jeton ne doit pas survivre au changement de propriétaire |
 
@@ -343,6 +373,11 @@ seul juge des droits attaches à un compte et au personnel, et le contrôleur
 n'appelle la policy que si le jeton n'a rien ouvert. Un jeton ne donne donc
 jamais accès à une transition (`cancel`, `ready`, `picked-up`), qui reste
 derrière `auth`.
+
+Ouvrir un paiement est, lui, une lecture autant qu'une écriture : c'est la
+commande telle qu'elle est déjà lisible qui est proposée à payer, à personne
+d'autre. Un client qui vient de commander sans compte doit pouvoir régler sa
+commande, sinon le jeton ne lui servirait qu'à la consulter.
 
 Conséquence sur le découpage : `GET /orders/{uuid}` et `GET /orders/{uuid}/qr`
 sont hors du groupe `auth`, sinon le jeton d'un invite serait rejeté avant d'être
@@ -481,9 +516,10 @@ au JSON et une autre à sa description rendraient le contrat décrit faux.
 | Sujet | Statut | Impact |
 |---|---|---|
 | Transaction et décrémentation de stock | Traité | `OrderService::create()` réserve le stock dans la même transaction que la commande, sous `lockForUpdate`, les variantes étant verrouillées par identifiant interne trié pour éviter les interblocages. Non testé en concurrence réelle : SQLite ignore `lockForUpdate`, seul PostgreSQL l'applique. |
-| Webhooks de paiement | Traité | Une route par agrégateur, hors session et hors CSRF, dont la signature HMAC-SHA256 du corps brut est vérifiée avant toute validation. Le rapprochement est idempotent : un rejeu ne refacture pas et ne réémet pas de facture. |
+| Webhooks de paiement | Traité | Une route par agrégateur, hors session et hors CSRF, dont la signature est vérifiée avant toute lecture du corps. Le rapprochement est idempotent : un rejeu ne refacture pas et ne réémet pas de facture. |
+| FedaPay | Traité | FedaPay ne parle pas comme les autres agrégateurs : sa signature porte sur `<horodatage>.<corps>`, ce qui borne le rejeu, et sa notification est un événement enveloppant une transaction. Il a donc son propre contrôleur et son propre service (`FedapayWebhookService`), faute de quoi la vérification échouerait à la première notification — ce qui, sur un webhook, ne se remarque qu'à l'absence de commandes payées. Le jeton de paiement est demandé par `Transaction::generateTokenFromId()` et non par la méthode d'instance : le SDK ne restitue un objet `Transaction` que si la réponse porte `klass`, et faire dépendre le chemin de paiement de ce détail le transformerait en erreur fatale. |
 | Chiffrement du QR Code de retrait | Traité | Le contenu porte l'uuid de commande et une empreinte HMAC de cet uuid, dérivée de `PICKUP_TOKEN_SECRET`. Seul l'empreinte est stockée ; le contenu est ré-générable. Un secret absent ferme la route de génération. |
 | Génération du QR Code | Traité | Rendu à la volée en PNG par `endroid/qr-code`, sans stockage : le contenu est déterministe, donc l'image est reproductible et n'a pas à être purgée. Requiert l'extension `ext-gd`, déclarée dans `composer.json`. |
 | Livraison : statut d'expédition | À concevoir | `OrderStatus` ne distingue pas « expédiée » de « payée » : une commande livrée reste en `PAID` jusqu'au retrait éventuel, faute d'événement de transport dans le plan de tracking. |
-| Accès aux commandes invitées | Traité | Une commande sans compte reçoit un jeton d'accès à la création, qui donne accès à cette seule commande et à son QR. Il n'ouvre aucune transition, et cesse d'être valable si la commande est rattachée à un compte. |
+| Accès aux commandes invitées | Traité | Une commande sans compte reçoit un jeton d'accès à la création, qui donne accès à cette seule commande, à son QR et à l'ouverture de son paiement. Il n'ouvre aucune transition, et cesse d'être valable si la commande est rattachée à un compte. |
 | Facture downloadable | À concevoir | La facture est émise et lisible par l'API, mais aucun endpoint ne la rend en PDF : le format de sortie et sa source de police restent à décider. |

@@ -27,6 +27,19 @@ class OrderFactory extends Factory
             // Reference lisible au guichet et unique en base.
             'order_number' => 'TDEV-'.now()->format('Ymd').'-'.strtoupper(fake()->unique()->bothify('??##??##')),
             'user_id' => User::factory(),
+
+            /*
+             * Identite de l'acheteur, obligatoire sur toute commande.
+             *
+             * La factory en produit une par defaut plutot que de la laisser
+             * nulle : une commande sans nom ni numero ne serait pas valide en
+             * production, et une factory qui produit des etats impossibles cache
+             * les tests qui comptaient dessus.
+             */
+            'customer_name' => fake()->lastName().' '.fake()->firstName(),
+            'customer_phone_number' => '0'.fake()->numerify('########'),
+            'customer_phone_country' => 'ci',
+            'fedapay_customer_id' => null,
             'sub_total' => $subTotal,
             'shipping_address' => null,
             'discount' => 0,

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "76c019ef18f13eb2eee409607d21060e",
+    "content-hash": "ff8ef2037ee55853046f3350d763b676",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -811,6 +811,59 @@
                 }
             ],
             "time": "2026-02-05T07:01:58+00:00"
+        },
+        {
+            "name": "fedapay/fedapay-php",
+            "version": "0.4.8",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/fedapay/fedapay-php.git",
+                "reference": "36f9f80878a9541e48a90db6f2d49b00ed868afe"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/fedapay/fedapay-php/zipball/36f9f80878a9541e48a90db6f2d49b00ed868afe",
+                "reference": "36f9f80878a9541e48a90db6f2d49b00ed868afe",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-mbstring": "*",
+                "php": ">=5.5"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^4.0 || ^5.7 || ^9.0",
+                "squizlabs/php_codesniffer": "^3.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "FedaPay\\": "lib/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "FedaPay and contributors",
+                    "homepage": "https://github.com/fedapay/fedapay-php/contributors"
+                }
+            ],
+            "description": "PHP library for FedaPay https://fedapay.com",
+            "homepage": "https://fedapay.com/",
+            "keywords": [
+                "api",
+                "fedapay",
+                "payment processing"
+            ],
+            "support": {
+                "issues": "https://github.com/fedapay/fedapay-php/issues",
+                "source": "https://github.com/fedapay/fedapay-php/tree/0.4.8"
+            },
+            "time": "2026-03-23T00:50:01+00:00"
         },
         {
             "name": "fruitcake/php-cors",
@@ -9395,9 +9448,9 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "ext-gd": "*",
-        "php": "^8.3"
+        "php": "^8.3",
+        "ext-gd": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.6.0"
 }

@@ -7,8 +7,12 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\Order\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
+use App\Http\Resources\PaymentResource;
+use App\Http\Resources\RefundResource;
 use App\Models\Order;
 use App\Services\OrderService;
+use App\Services\Payments\CheckoutService;
+use App\Services\Payments\RefundService;
 use App\Support\Orders\OrderAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +31,8 @@ final class OrderController extends ApiController
 {
     public function __construct(
         private readonly OrderService $orders,
+        private readonly CheckoutService $checkout,
+        private readonly RefundService $refunds,
         private readonly OrderAccess $access,
     ) {}
 
@@ -102,6 +108,62 @@ final class OrderController extends ApiController
         }
 
         return $this->jsonResource($resource, Response::HTTP_CREATED);
+    }
+
+    /**
+     * Ouvre — ou rend — le paiement d'une commande.
+     *
+     * La commande est d'abord lue comme elle l'est dans `show`, et l'autorisation
+     * verifiee par les memes deux voies. Un invite paie donc avec le jeton qu'il
+     * a recu a la creation, comme il relit sa commande avec ce meme jeton : les
+     * deux routes ont le meme public, et il aurait ete incoherent d'exiger un
+     * compte pour lire une commande que l'on vient de creer sans compte.
+     *
+     * L'appel a l'operateur est fait ici et non a la creation de la commande,
+     * pour deux raisons : il est lent, et il n'a lieu qu'une fois que l'acheteur
+     * a decide de payer. Le declencher a la commande ouvrirait une transaction
+     * chez l'operateur pour des paniers abandonnes.
+     *
+     * La reponse est toujours un 200. La route est idempotente : la rappeler
+     * rend la meme adresse de paiement sans appeler l'operateur une seconde
+     * fois, ce qui rend un 201 ambigu — impossible de savoir, cote client, s'il
+     * decrit une creation ou un simple rappel.
+     */
+    public function pay(Request $request, string $uuid): PaymentResource
+    {
+        $order = $this->orders->findOrFail($uuid);
+
+        $this->authorizeRead($request, $order);
+
+        return PaymentResource::make($this->checkout->start($order)->load('order'));
+    }
+
+    /**
+     * Demande le remboursement d'une commande reglee.
+     *
+     * La route ne dit pas « la commande est remboursee » : elle dit « le
+     * remboursement est demande ». L'argent sort apres, sur une notification de
+     * l'operateur, et le guichet doit pouvoir consulter cet etat intermediaire
+     * plutot que d'inferer d'un statut final une sortie qui n'a pas eu lieu.
+     *
+     * Elle rend toujours 200, comme le checkout : la demande est enregistree et
+     * un depot demande, meme en attente de confirmation. Un 201 ou un 202
+     * dirait la meme chose et laisserait croire que l'argent est deja parti.
+     */
+    public function refund(Request $request, string $uuid): RefundResource
+    {
+        $order = $this->orders->findOrFail($uuid);
+
+        /*
+         * Le droit de rembourser est decide par la policy, et non par la
+         * session : il appartient au guichet et a lui seul. C'est aussi
+         * exactement ce que `OrderPolicy::refund` dit deja, ce qui explique
+         * qu'aucun client ne puisse s'attribuer la restitution de sa commande
+         * — ni celle d'autrui.
+         */
+        $this->authorize('refund', $order);
+
+        return RefundResource::make($this->refunds->request($order));
     }
 
     /**

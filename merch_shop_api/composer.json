@@ -9,12 +9,13 @@
     ],
     "license": "MIT",
     "require": {
-        "endroid/qr-code": "^6.1",
-        "cloudinary/cloudinary_php": "^3",
+        "php": "^8.3",
         "ext-gd": "*",
+        "cloudinary/cloudinary_php": "^3",
+        "endroid/qr-code": "^6.1",
+        "fedapay/fedapay-php": "^0.4.8",
         "laravel/framework": "^13.17",
-        "laravel/tinker": "^3.0",
-        "php": "^8.3"
+        "laravel/tinker": "^3.0"
     },
     "require-dev": {
         "darkaonline/l5-swagger": "^11.1",

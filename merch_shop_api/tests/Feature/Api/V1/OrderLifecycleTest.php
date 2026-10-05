@@ -192,7 +192,7 @@ class OrderLifecycleTest extends TestCase
 
         $this->assertSame(6, $variant->refresh()->stock);
 
-        $refunded = $this->orders->refund($paid);
+        $refunded = $this->orders->markRefunded($paid);
 
         $this->assertSame(OrderStatus::REFUNDED, $refunded->status);
         $this->assertSame(10, $variant->refresh()->stock, 'Un remboursement rend les articles au stock.');
@@ -210,7 +210,7 @@ class OrderLifecycleTest extends TestCase
         $ready = $this->orders->markReadyForPickup($paid);
         $served = $this->orders->markPickedUp($ready);
 
-        $refunded = $this->orders->refund($served);
+        $refunded = $this->orders->markRefunded($served);
 
         $this->assertSame(OrderStatus::REFUNDED, $refunded->status);
         $this->assertSame(
@@ -400,6 +400,8 @@ class OrderLifecycleTest extends TestCase
             'fulfillment_method' => $fulfillmentMethod,
             'shipping_address' => $fulfillmentMethod === FulfillmentMethod::DELIVERY ? 'Lome' : null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
             'participant_id' => null,
         ]);
     }

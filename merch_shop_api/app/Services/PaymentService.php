@@ -44,23 +44,39 @@ final class PaymentService
     /**
      * Applique la notification d'un operateur.
      *
-     * @param  array{reference: string, transaction_id: string, status: PaymentStatus, amount?: string|null, failure_reason?: string|null}  $notification
+     * `reference` est la notre : l'uuid du paiement, transmis a l'operateur au
+     * moment du checkout. Elle peut etre absente chez un operateur dont les
+     * metadonnees ne sont pas restituees dans ses notifications : le
+     * rapprochement se fait alors sur `transaction_id`, que nous avons stockee en
+     * ecrivant le checkout et qui est, elle, toujours la nôtre.
+     *
+     * @param  array{reference?: string|null, transaction_id: string, status: PaymentStatus, amount?: string|null, failure_reason?: string|null}  $notification
      */
     public function handleNotification(array $notification): Order
     {
         return DB::transaction(function () use ($notification): Order {
-            $payment = $this->payments->findWithOrder($notification['reference']);
+            $payment = $this->locate($notification);
 
             if ($payment === null) {
                 throw new ApiException(
                     'Paiement inconnu.',
                     404,
                     'PAYMENT_NOT_FOUND',
-                    ['reference' => $notification['reference']],
+                    [
+                        'reference' => $notification['reference'] ?? null,
+                        'transaction_id' => $notification['transaction_id'],
+                    ],
                 );
             }
 
-            $order = $payment->order;
+            /*
+             * Le verrou du paiement protege une tentative contre son propre
+             * rejeu. Celui de la commande protege aussi deux tentatives
+             * differentes qui voudraient simultanement consommer le meme
+             * solde, emettre la meme facture ou ouvrir le meme droit de retrait.
+             */
+            $order = $payment->order()->lockForUpdate()->firstOrFail();
+            $payment->setRelation('order', $order);
 
             $this->attachTransaction($payment, $notification);
 
@@ -117,6 +133,31 @@ final class PaymentService
     }
 
     /**
+     * Retrouve le paiement vise par une notification.
+     *
+     * Deux voies, dans cet ordre. La reference interne d'abord, parce qu'elle
+     * est la seule que nous choisissons et qui ne peut donc pas designer par
+     * accident une autre commande. La reference operateur ensuite, ce qui n'est
+     * possible que parce que le checkout l'a ecrite : sans cette ecriture, un
+     * webhook sans metadonnees serait sans aucun moyen de retour.
+     *
+     * La reference operateur est chargee avec sa commande comme la premiere, la
+     * comparaison du montant qui suit ayant besoin des deux.
+     *
+     * @param  array{reference?: string|null, transaction_id: string}  $notification
+     */
+    private function locate(array $notification): ?Payment
+    {
+        $reference = $notification['reference'] ?? null;
+
+        if (is_string($reference) && $reference !== '') {
+            return $this->payments->findWithOrder($reference);
+        }
+
+        return $this->payments->findByTransactionId($notification['transaction_id']);
+    }
+
+    /**
      * Confirme le reglement d'un paiement.
      *
      * La commande n'est close que lorsque son solde est couvert : une commande
@@ -162,11 +203,17 @@ final class PaymentService
      * L'echec est conserve plutot que la ligne supprimee : le plan de tracking
      * exige de garder les refus, seul un succes n'etant jamais seul a dire ce
      * qu'une campagne a rapporte.
+     *
+     * La date d'echec est ecrite ici et non laissee nulle : sans elle, un
+     * abandon de paiement et une tentative jamais presentee a l'operateur
+     * produisent la meme ligne, et le taux d'echec par moyen de paiement — que
+     * le plan de tracking demande — devient impossible a calculer.
      */
     private function reject(Payment $payment, ?string $reason): void
     {
         $payment->update([
             'status' => PaymentStatus::FAILED,
+            'failed_at' => now(),
             'failure_reason' => $reason,
         ]);
     }

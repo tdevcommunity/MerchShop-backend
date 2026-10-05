@@ -22,6 +22,12 @@ use Tests\TestCase;
  * dont la reponse n'appartient pas au client. Les tests font donc deux choses :
  * verifier qu'une requete non signee ne fait rien, et verifier que la session du
  * guichetier ne peut pas etre contournee.
+ *
+ * Les notifications sont envoyees a KKiaPay, et non a FedaPay. FedaPay a son
+ * propre format — une enveloppe d'evenement et une signature sur l'horodatage
+ * suivi du corps — et sa route a donc son propre controleur, couvert par
+ * `FedapayWebhookTest`. KKiaPay sert ici de temoin du chemin generique, qui
+ * reste celui des agregateurs pas encore integres.
  */
 class PaymentWebhookAndPickupTest extends TestCase
 {
@@ -33,7 +39,7 @@ class PaymentWebhookAndPickupTest extends TestCase
     {
         parent::setUp();
 
-        config()->set('orders.webhooks.fedapay.secret', self::SECRET);
+        config()->set('orders.webhooks.kkiapay.secret', self::SECRET);
     }
 
     public function test_it_accepts_a_correctly_signed_notification(): void
@@ -41,7 +47,7 @@ class PaymentWebhookAndPickupTest extends TestCase
         $order = $this->pendingOrder();
         $payload = $this->notification($order, 'success');
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, $this->signatureHeaders($payload))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, $this->signatureHeaders($payload))
             ->assertOk()
             ->assertJsonPath('data.orderUuid', $order->uuid)
             ->assertJsonPath('data.status', OrderStatus::PAID->value);
@@ -61,7 +67,7 @@ class PaymentWebhookAndPickupTest extends TestCase
 
         $payload = $this->notification($order, 'success', ['amount' => '2500.50']);
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, $this->signatureHeaders($payload))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, $this->signatureHeaders($payload))
             ->assertUnprocessable();
 
         $this->assertSame(OrderStatus::PENDING_PAYMENT, $order->refresh()->status);
@@ -78,7 +84,7 @@ class PaymentWebhookAndPickupTest extends TestCase
 
         $payload = $this->notification($order, 'success', ['amount' => '2500.00']);
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, $this->signatureHeaders($payload))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, $this->signatureHeaders($payload))
             ->assertOk();
 
         $this->assertSame(OrderStatus::PAID, $order->refresh()->status);
@@ -88,7 +94,7 @@ class PaymentWebhookAndPickupTest extends TestCase
     {
         $order = $this->pendingOrder();
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $this->notification($order, 'success'))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $this->notification($order, 'success'))
             ->assertUnauthorized()
             ->assertJsonPath('error.code', 'INVALID_WEBHOOK_SIGNATURE');
 
@@ -100,7 +106,7 @@ class PaymentWebhookAndPickupTest extends TestCase
         $order = $this->pendingOrder();
         $payload = $this->notification($order, 'success');
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, [
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, [
             'X-Payment-Signature' => hash_hmac('sha256', json_encode($payload), 'mauvais-secret'),
         ])->assertUnauthorized();
 
@@ -111,7 +117,7 @@ class PaymentWebhookAndPickupTest extends TestCase
     {
         $payload = ['reference' => 'pas-un-uuid', 'status' => 'succes', 'amount' => '2500.00'];
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, $this->signatureHeaders($payload))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, $this->signatureHeaders($payload))
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'VALIDATION_ERROR');
     }
@@ -134,7 +140,7 @@ class PaymentWebhookAndPickupTest extends TestCase
         $order = $this->pendingOrder();
         $payload = $this->notification($order, 'failed', ['failure_reason' => 'Solde insuffisant']);
 
-        $this->postJson('/api/v1/payments/webhooks/fedapay', $payload, $this->signatureHeaders($payload))
+        $this->postJson('/api/v1/payments/webhooks/kkiapay', $payload, $this->signatureHeaders($payload))
             ->assertOk()
             ->assertJsonPath('data.status', OrderStatus::PENDING_PAYMENT->value);
 
@@ -314,6 +320,8 @@ class PaymentWebhookAndPickupTest extends TestCase
             'fulfillment_method' => 'pickup',
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
             'participant_id' => null,
         ]);
     }

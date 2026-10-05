@@ -100,11 +100,21 @@ return [
     | n'importe quel client. La route est donc fermée tant que le secret n'est
     | pas renseigné, plutôt qu'ouverte à quiconque.
     |
+    | FedaPay fait exception à la règle générale. Sa signature porte sur
+    | l'horodatage de l'évènement suivi du corps, et non sur le corps seul :
+    | `tolerance` est la fenêtre, en secondes, pendant laquelle une notification
+    | reste acceptable. Passé ce délai la notification est refusée même si sa
+    | signature est parfaite, ce qui empêche de rejouer une ancienne confirmation
+    | pour faire payer deux fois une commande. Elle vaut cinq minutes par défaut,
+    | assez pour absorber le décalage d'horloge entre deux machines et les envois
+    | rattrapés après une coupure, sans laisser une fenêtre exploitable.
+    |
     */
 
     'webhooks' => [
         'fedapay' => [
             'secret' => env('PAYMENT_WEBHOOK_SECRET_FEDAPAY'),
+            'tolerance' => (int) env('FEDAPAY_WEBHOOK_TOLERANCE', 300),
         ],
         'kkiapay' => [
             'secret' => env('PAYMENT_WEBHOOK_SECRET_KKIAPAY'),

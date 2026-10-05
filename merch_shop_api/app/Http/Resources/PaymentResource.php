@@ -9,9 +9,11 @@ use Illuminate\Http\Request;
  * Representation d'une tentative de paiement.
  *
  * `transactionId` est expose parce que le guichet en a besoin pour rapprocher
- * un versement Mobile Money d'une commande. Il n'est renvoye qu'une fois le
- * paiement confirme : avant, la reference existe dans la base mais n'a encore
- * ete vue par aucun operateur, et l'afficher n'apporterait rien au client.
+ * un versement Mobile Money d'une commande, et parce que la reponse de
+ * `POST /orders/{uuid}/payment` doit pouvoir etre comparée d'un appel a l'autre
+ * pour prouver que le second n'a pas ouvert une seconde transaction. Il est
+ * donc present des que le checkout l'a ecrit, et non a la confirmation — c'est
+ * le moment ou la reference existe.
  *
  * @mixin Payment
  */
@@ -52,6 +54,18 @@ final class PaymentResource extends ApiResource
             'status' => $payment->status->value,
             'transactionId' => $payment->transaction_id,
             'failureReason' => $payment->failure_reason,
+
+            /*
+             * Adresse de paiement chez l'operateur.
+             *
+             * Elle est exposee des que la tentative a ete presentee, contrairement
+             * a `transactionId` : c'est ce que le client doit faire de cette
+             * reponse, et une valeur absente pour une ligne qui attend un
+             * reglement ne lui apporterait rien. Elle ne dit rien du paiement —
+             * l'argent n'est encaisse que sur confirmation du webhook — et un
+             * client qui l'ignore ne commande que des articles payes d'avance.
+             */
+            'checkoutUrl' => $payment->checkout_url,
 
             /*
              * Les trois horodatages de la transaction demandes par la spec

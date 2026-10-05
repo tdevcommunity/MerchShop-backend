@@ -79,6 +79,8 @@ class OrderApiTest extends TestCase
             ],
             'fulfillment_method' => 'pickup',
             'payment_method' => 'mobile_money',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
         ])->assertStatus(422);
     }
 
@@ -90,6 +92,8 @@ class OrderApiTest extends TestCase
             'items' => [['uuid' => $variant->uuid, 'quantity' => 1]],
             'fulfillment_method' => 'delivery',
             'payment_method' => 'card',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
         ])->assertStatus(422)
             ->assertJsonPath('error.code', 'VALIDATION_ERROR')
             ->assertJsonStructure(['error' => ['details' => ['fields' => ['shipping_address']]]]);
@@ -237,6 +241,8 @@ class OrderApiTest extends TestCase
             'items' => [['uuid' => $variant->uuid, 'quantity' => $quantity]],
             'fulfillment_method' => 'pickup',
             'payment_method' => 'mobile_money',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
         ];
     }
 
@@ -250,6 +256,8 @@ class OrderApiTest extends TestCase
             'fulfillment_method' => 'pickup',
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
             'participant_id' => null,
         ]);
     }

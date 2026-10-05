@@ -97,6 +97,7 @@ La colonne `Requis` indique si un champ est obligatoire (`Oui`) ou facultatif (`
 |  | `phone` | `string` | Oui | numéro de téléphone |
 |  | `email` | `string` | Oui | adresse e-mail unique |
 |  | `password` | `string` | Oui | mot de passe en clair côté client, hashé côté serveur |
+|  | `password_confirmation` | `string` | Oui | confirmation du mot de passe |
 | `POST /api/v1/auth/login` | `email` | `string` | Oui | adresse e-mail |
 |  | `password` | `string` | Oui | mot de passe |
 |  | `remember` | `boolean` | Non | active une session persistante |
@@ -109,12 +110,12 @@ Réponse attendue : `201` pour l'inscription ou `200` pour la connexion, avec un
 |---|---|---|---|---|
 | `POST /api/v1/categories` | `name` | `string` | Oui | nom de la catégorie |
 |  | `description` | `string|null` | Non | description de la catégorie |
-|  | `slug` | `string` | Oui | identifiant lisible pour l'URL |
-|  | `status` | `string` | Oui | `active` ou `inactive` |
-| `PUT /api/v1/categories/{uuid}` | `name` | `string` | Oui | nom de la catégorie |
-|  | `description` | `string|null` | Non | description de la catégorie |
-|  | `slug` | `string` | Oui | identifiant lisible pour l'URL |
-|  | `status` | `string` | Oui | `active` ou `inactive` |
+|  | `slug` | `string|null` | Non | slug ; dérivé du nom s'il est absent |
+|  | `status` | `integer` | Non | `0` inactive ou `1` active |
+| `PUT /api/v1/categories/{uuid}` | `name` | `string` | Non | champ modifiable |
+|  | `description` | `string|null` | Non | champ modifiable |
+|  | `slug` | `string|null` | Non | champ modifiable |
+|  | `status` | `integer` | Non | `0` inactive ou `1` active |
 
 Réponse attendue : `201` pour la création et `200` pour la mise à jour, avec un objet `CategoryResource`.
 
@@ -124,16 +125,19 @@ Réponse attendue : `201` pour la création et `200` pour la mise à jour, avec 
 |---|---|---|---|---|
 | `POST /api/v1/products` | `name` | `string` | Oui | nom du produit |
 |  | `description` | `string|null` | Non | description du produit |
-|  | `slug` | `string` | Oui | slug public du produit |
-|  | `category_uuid` | `string` | Oui | UUID de la catégorie parent |
-|  | `status` | `string` | Oui | `active` ou `inactive` |
-|  | `variants` | `array<object>` | Oui | liste des variantes |
+|  | `image_url` | `string|null` | Non | URL absolue de l'image |
+|  | `category_id` | `integer` | Oui | identifiant de la catégorie parent |
+|  | `slug` | `string|null` | Non | slug public du produit |
+|  | `status` | `integer` | Non | `0` inactive ou `1` active |
+|  | `variants` | `array<object>` | Non | exclusif avec `default_variant` |
+|  | `default_variant` | `object|null` | Conditionnel | prix et stock si aucune variante n'est envoyée |
 | `PUT /api/v1/products/{uuid}` | `name` | `string` | Oui | nom du produit |
 |  | `description` | `string|null` | Non | description du produit |
-|  | `slug` | `string` | Oui | slug public du produit |
-|  | `category_uuid` | `string` | Oui | UUID de la catégorie parent |
-|  | `status` | `string` | Oui | `active` ou `inactive` |
-|  | `variants` | `array<object>` | Oui | liste des variantes |
+|  | `image_url` | `string|null` | Non | URL absolue de l'image |
+|  | `category_id` | `integer` | Non | identifiant de la catégorie parent |
+|  | `slug` | `string|null` | Non | slug public du produit |
+|  | `status` | `integer` | Non | `0` inactive ou `1` active |
+|  | `variants` | `array<object>` | Non | absence = variantes inchangées |
 
 Payload d'une variante :
 
@@ -145,8 +149,8 @@ Payload d'une variante :
 | `color` | `string|null` | Non | couleur |
 | `price` | `integer` | Oui | prix en XOF |
 | `stock` | `integer` | Oui | quantité disponible |
-| `is_default` | `boolean` | Non | indique que la variante est la variante par défaut |
-| `status` | `string` | Oui | `active` ou `inactive` |
+| `name` | `string` | Oui | libellé de la variante |
+| `status` | `integer` | Non | `0` inactive ou `1` active |
 
 Réponse attendue : `201` ou `200` avec un objet `ProductResource` contenant les données de la catégorie et des variantes publiées.
 
@@ -155,20 +159,24 @@ Réponse attendue : `201` ou `200` avec un objet `ProductResource` contenant les
 | Endpoint | Champ du payload | Type | Requis | Description |
 |---|---|---|---|---|
 | `POST /api/v1/orders` | `items` | `array<object>` | Oui | lignes de commande |
+|  | `customer_name` | `string` | Oui | nom de l'acheteur |
+|  | `customer_phone_number` | `string` | Oui | numéro togolais |
+|  | `customer_phone_country` | `string|null` | Non | code pays sur 2 caractères |
 |  | `fulfillment_method` | `string` | Oui | `pickup` ou `delivery` |
-|  | `shipping_address` | `string|null` | Non | adresse de livraison si applicable |
-|  | `participant_id` | `string|null` | Non | identifiant participant pour un achat externe |
+|  | `shipping_address` | `string|null` | Conditionnel | obligatoire si `delivery` |
+|  | `payment_method` | `string` | Oui | `mobile_money` ou `card` |
+|  | `participant_id` | `string|null` | Non | identifiant participant |
 
 Payload d'une ligne de commande :
 
 | Champ | Type | Requis | Description |
 |---|---|---|---|
-| `variant_uuid` | `string` | Oui | UUID de la variante concernée |
+| `uuid` | `string` | Oui | UUID de la variante concernée |
 | `quantity` | `integer` | Oui | quantité commandée |
-| `unit_price` | `integer` | Non | prix unitaire calculé côté serveur |
-| `notes` | `string|null` | Non | commentaire libre |
+| `unit_price` | - | - | non accepté ; calculé côté serveur |
+| `notes` | - | - | non accepté |
 
-Réponse attendue : `201` avec un objet `OrderResource`. Pour une commande invitée, le token de consultation est retourné une seule fois dans la réponse et doit être réenvoyé via l'en-tête `X-Guest-Order-Token`.
+Réponse attendue : `201` avec un objet `OrderResource`. Pour une commande invitée, le token de consultation est retourné une seule fois dans la réponse et doit être réenvoyé via l'en-tête `X-Order-Token`.
 
 #### Retrait au guichet
 
@@ -182,14 +190,45 @@ Réponse attendue : `200` avec l'objet de commande ou le statut de retrait. Un Q
 
 | Endpoint | Champ du payload | Type | Requis | Description |
 |---|---|---|---|---|
-| `POST /api/v1/payments/webhooks/{provider}` | `event` | `string` | Oui | type d'événement fourni par le provider |
-|  | `transaction_id` | `string` | Oui | identifiant de transaction fournisseur |
-|  | `status` | `string` | Oui | statut final ou intermédiaire retourné par le provider |
-|  | `amount` | `integer` | Oui | montant payé en sous-unité |
-|  | `currency` | `string` | Oui | devise de paiement |
-|  | `signature` | `string` | Oui | signature vérifiée par le serveur |
+| `POST /api/v1/payments/webhooks/{provider}` | `reference` | `string` | Oui | UUID du paiement générique |
+|  | `transaction_id` | `string|null` | Non | référence fournisseur |
+|  | `status` | `string` | Oui | `pending`, `success`, `successful`, `failed` ou `refused` |
+|  | `amount` | `string` | Oui | montant entier en XOF |
+|  | `failure_reason` | `string|null` | Non | motif d'échec |
 
-Réponse attendue : `200` avec un objet minimal de confirmation : `orderUuid`, `orderNumber` et `status`.
+Réponse attendue : `200` avec un objet minimal de confirmation : `orderUuid`,
+`orderNumber` et `status`.
+
+FedaPay utilise une route dédiée :
+`POST /api/v1/payments/webhooks/fedapay`. Elle n'utilise pas ce body plat.
+Elle exige le header `X-FEDAPAY-SIGNATURE` au format
+`t=<timestamp>,s=<signature>`, calculé sur `<timestamp>.<corps>`. Le JSON
+contient `type` ou `name`, puis la transaction sous `data` ou `object` avec
+`id`, `reference`, `status`, `amount` et éventuellement `metadata` ou
+`custom_metadata`. Les statuts `approved` et `transferred` confirment le
+paiement ; `pending` et les remboursements sont acquittés sans confirmer un
+paiement.
+
+#### Analytics
+
+`POST /api/v1/events` enregistre un lot de 1 à 100 événements. Le body ne
+contient aucun montant calculé par le serveur :
+
+| Champ | Type | Requis | Description |
+|---|---|---|---|
+| `events` | `array<object>` | Oui | lot d'événements |
+| `events[].event_name` | `string` | Oui | nom de l'événement |
+| `events[].event_time` | `string` | Oui | date/heure valide |
+| `events[].session_id` | `string` | Oui | identifiant de session |
+| `events[].participant_id` | `string|null` | Non | participant concerné |
+| `events[].page` | `string|null` | Non | page visitée |
+| `events[].product_id` | `string|null` | Non | produit concerné |
+| `events[].device_type` | `string|null` | Non | type d'appareil |
+| `events[].browser` | `string|null` | Non | navigateur |
+| `events[].os` | `string|null` | Non | système d'exploitation |
+| `events[].source` | `string|null` | Non | source d'acquisition |
+| `events[].campaign` | `string|null` | Non | campagne |
+| `events[].properties` | `object|null` | Non | propriétés libres de l'événement |
 
 ### Santé
 
@@ -239,7 +278,7 @@ Réponse attendue : `200` avec un objet JSON contenant le token CSRF et l’éta
 Crée un compte client actif, hache son mot de passe et ouvre immédiatement une
 session. Le client ne peut pas choisir le rôle ou le statut du compte.
 
-Payload attendu : `firstname`, `lastname`, `phone`, `email`, `password`.
+Payload attendu : `firstname`, `lastname`, `phone`, `email`, `password` et `password_confirmation`. Le téléphone doit être togolais (`+228` suivi de 8 chiffres).
 Réponse : `201` avec `UserResource`.
 
 Exemple de réponse attendue :
@@ -539,10 +578,12 @@ Payload attendu :
 |---|---|---|---|
 | `name` | `string` | Oui | nom du produit |
 | `description` | `string|null` | Non | description |
-| `slug` | `string` | Oui | identifiant public du produit |
-| `category_uuid` | `string` | Oui | UUID de la catégorie |
-| `status` | `string` | Oui | `active` ou `inactive` |
-| `variants` | `array<object>` | Oui | liste des variantes |
+| `image_url` | `string|null` | Non | URL absolue de l'image |
+| `category_id` | `integer` | Oui | identifiant de la catégorie |
+| `slug` | `string|null` | Non | slug public du produit |
+| `status` | `integer` | Non | `0` inactive ou `1` active |
+| `variants` | `array<object>` | Non | exclusif avec `default_variant` |
+| `default_variant` | `object|null` | Conditionnel | prix et stock si aucune variante n'est envoyée |
 
 Exemple de réponse attendue :
 
@@ -593,6 +634,7 @@ Réponse attendue : `204` ou `200` selon la stratégie de suppression :
 | GET | `/api/v1/orders` | Session requise | `OrderController` | `index` |
 | GET | `/api/v1/orders/{uuid}` | Session ou token invité | `OrderController` | `show` |
 | POST | `/api/v1/orders/{uuid}/cancel` | Session requise | `OrderController` | `cancel` |
+| POST | `/api/v1/orders/{uuid}/refund` | Staff ou admin | `OrderController` | `refund` |
 
 #### Création
 
@@ -620,14 +662,14 @@ Payload d'une ligne de commande :
 
 | Champ | Type | Requis | Description |
 |---|---|---|---|
-| `variant_uuid` | `string` | Oui | UUID de la variante |
+| `uuid` | `string` | Oui | UUID de la variante |
 | `quantity` | `integer` | Oui | quantité commandée |
-| `unit_price` | `integer` | Non | prix unitaire calculé côté serveur |
-| `notes` | `string|null` | Non | commentaire libre |
+| `unit_price` | - | - | non accepté ; calculé côté serveur |
+| `notes` | - | - | non accepté |
 
 Réponse : `201` avec `OrderResource`. Le token invité n'est retourné qu'une
 seule fois dans cette réponse et doit être envoyé ensuite dans l'en-tête
-`X-Guest-Order-Token`.
+`X-Order-Token`.
 
 Exemple de réponse attendue :
 
@@ -717,6 +759,60 @@ Exemple de réponse attendue :
     }
   ],
   "createdAt": "2026-09-30T12:00:00Z"
+}
+```
+
+#### Paiement d'une commande
+
+`POST /orders/{uuid}/payment` ouvre une tentative de paiement chez
+l'agrégateur configuré et renvoie l'adresse à laquelle l'acheteur règle.
+
+Accès : propriétaire de la commande, ou token `X-Order-Token` pour une
+commande invitée. Le personnel du guichet, qui peut lire la commande, peut
+aussi l'ouvrir pour un client bloqué.
+
+Payload : aucun. Le montant, la devise et l'agrégateur sont déterminés côté
+serveur à partir de la commande ; le client n'en choisit aucun.
+
+L'appel est **idempotent** : deux appels successifs ne créent pas deux
+transactions chez l'opérateur, le second renvoyant la même adresse de
+paiement. C'est ce qui permet à un acheteur qui a perdu son onglet de
+reprendre son paiement sans que sa commande porte deux règlements en attente.
+
+Cette route **n'encaisse rien**. La commande reste en attente de paiement
+jusqu'à la notification de l'opérateur : une adresse de paiement n'est pas
+une preuve de paiement.
+
+| Réponse | Signification |
+|---|---|
+| `200` | Adresse de paiement rendue (`PaymentResource`) |
+| `403` | Commande d'un autre compte, ou aucune session ni token |
+| `409` | Commande déjà réglée, ou annulée |
+| `429` | Trop d'appels sur la fenêtre courante |
+| `502` | Opérateur injoignable ; la commande reste ouverte |
+| `503` | Agrégateur ou adresse de retour non configurés |
+
+La route est limitée en débit : chaque appel est un appel à un tiers, et
+un client qui boucle ne doit pas pouvoir multiplier les transactions chez
+l'opérateur.
+
+Exemple de réponse attendue :
+
+```json
+{
+  "data": {
+    "uuid": "55555555-6666-7777-8888-999999000000",
+    "orderId": "44444444-5555-6666-7777-888888999999",
+    "amount": "2500",
+    "method": "mobile_money",
+    "provider": "fedapay",
+    "status": 1,
+    "transactionId": "FEDAPAY-9001",
+    "checkoutUrl": "https://sandbox-process.fedapay.com/jeton",
+    "createdAt": "2026-10-05T12:00:00Z",
+    "paidAt": null,
+    "failedAt": null
+  }
 }
 ```
 
@@ -825,7 +921,7 @@ Exemple de réponse attendue :
 ```
 
 `GET /orders/{uuid}/qr` renvoie une image PNG. Une commande invitée doit fournir
-`X-Guest-Order-Token`. La réponse utilise `Content-Type: image/png` et un cache
+`X-Order-Token`. La réponse utilise `Content-Type: image/png` et un cache
 privé court.
 
 Payload : aucun.
@@ -836,26 +932,57 @@ Réponse attendue : `200` avec un binaire PNG ; aucun JSON n'est renvoyé en tan
 
 | Méthode | Endpoint | Accès | Contrôleur | Fonction |
 |---|---|---|---|---|
-| POST | `/api/v1/payments/webhooks/fedapay` | Signature opérateur | `PaymentWebhookController` | `handle` |
+| POST | `/api/v1/payments/webhooks/fedapay` | Signature FedaPay horodatée | `FedapayWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/kkiapay` | Signature opérateur | `PaymentWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/paygate` | Signature opérateur | `PaymentWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/flooz` | Signature opérateur | `PaymentWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/tmoney` | Signature opérateur | `PaymentWebhookController` | `handle` |
 
-Les webhooks ne nécessitent pas de session. La signature du corps est vérifiée
-avant la validation et avant toute écriture. Une notification signée et valide
-est rapprochée par `PaymentService`, qu'elle indique un succès ou un échec.
+Les webhooks ne nécessitent pas de session. La signature est vérifiée avant
+toute lecture du corps et avant toute écriture, et une notification signée
+et valide est rapprochée par `PaymentService`, qu'elle indique un succès ou
+un échec.
 
-Payload attendu :
+#### Cas particulier de FedaPay
+
+FedaPay ne parle pas comme les autres agrégateurs, et ne passe donc pas par
+le contrôleur générique :
+
+| Caractéristique | Agrégateurs génériques | FedaPay |
+|---|---|---|
+| En-tête de signature | `X-Payment-Signature` | `X-FEDAPAY-SIGNATURE` |
+| Corps signé | le corps seul | `<horodatage>.<corps>` |
+| Corps de la notification | plat : `reference`, `status`, `amount` | un événement : `type` + `data` (ou `object`) |
+| Fenêtre de rejeu | aucune | horodatage signé, 300 s par défaut |
+
+Faire passer l'un pour l'autre viderait la vérification de l'un des deux :
+c'est la raison d'être de `FedapayWebhookController`.
+
+Le secret de signature est propre à l'environnement (`FEDAPAY_WEBHOOK_SECRET`
+en sandbox, en test et en production). Son absence ferme la route par un `503`
+plutôt que de l'ouvrir à quiconque en trouve l'adresse.
+
+Le rapprochement se fait sur la référence interne du paiement, transportée
+dans les métadonnées de la transaction. La référence attribuée par FedaPay
+sert de repli si ces métadonnées ne reviennent pas.
+
+Seul le **statut de la transaction** décide de l'effet : `approved` et
+`transferred` valent règlement, `declined` et `canceled` valent échec,
+`pending` est acquitté sans effet. Un statut inconnu produit un `422` plutôt
+qu'un refus par défaut, pour ne pas faire passer une transaction réussie pour
+un échec. Les événements de remboursement sont acquittés sans écriture : le
+remboursement est une décision du guichet, pas d'un événement.
+
+Payload attendu pour les agrégateurs génériques (FedaPay utilise l'enveloppe
+décrite ci-dessus) :
 
 | Champ | Type | Requis | Description |
 |---|---|---|---|
-| `event` | `string` | Oui | type d'événement fourni par le provider |
-| `transaction_id` | `string` | Oui | identifiant de transaction fournisseur |
-| `status` | `string` | Oui | statut final ou intermédiaire retourné par le provider |
-| `amount` | `integer` | Oui | montant payé en sous-unité |
-| `currency` | `string` | Oui | devise de paiement |
-| `signature` | `string` | Oui | signature vérifiée par le serveur |
+| `reference` | `string` | Oui | UUID de la tentative de paiement |
+| `transaction_id` | `string|null` | Non | identifiant fournisseur |
+| `status` | `string` | Oui | `pending`, `success`, `successful`, `failed` ou `refused` |
+| `amount` | `string` | Oui | montant entier en XOF |
+| `failure_reason` | `string|null` | Non | motif d'échec |
 
 Réponse attendue : `200` avec un objet minimal de confirmation :
 

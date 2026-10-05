@@ -231,6 +231,8 @@ class GuestOrderAccessTest extends TestCase
             'items' => [['uuid' => $variant->uuid, 'quantity' => 1]],
             'fulfillment_method' => 'pickup',
             'payment_method' => 'mobile_money',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '0707070707',
         ];
     }
 }

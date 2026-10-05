@@ -20,12 +20,16 @@
 | et elle seule, dit qui l'a envoyee.
 |
 | La suppression des middlewares est donc un choix delibere et non un oubli.
-| Elle ne vaut que parce que PaymentWebhookController verifie la signature du
-| corps avant toute autre chose.
+| Elle ne vaut que parce que le controleur verifie la signature avant toute
+| autre chose : `FedapayWebhookController` pour FedaPay, et
+| `PaymentWebhookController` pour les agregateurs qui partagent encore le
+| chemin generique.
 |
 */
 
 use App\Enums\PaymentProvider;
+use App\Http\Controllers\Api\V1\FedapayPayoutWebhookController;
+use App\Http\Controllers\Api\V1\FedapayWebhookController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -43,14 +47,23 @@ Route::prefix('payments/webhooks')
     ])
     ->group(function (): void {
         foreach (PaymentProvider::cases() as $provider) {
-            Route::post('/'.$provider->value, [PaymentWebhookController::class, 'handle'])
-                /*
-                 * Le chemin est litteral, mais l'action a besoin de savoir de
-                 * quel operateur il s'agit. La valeur est donc injectee comme
-                 * parametre de route : le controleur ne la devine pas du chemin,
-                 * et un operateur inconnu ne peut pas designer le nom d'un autre
-                 * operateur en l'envoyant dans le corps.
-                 */
+            /*
+             * FedaPay a son propre controleur, car sa notification n'a ni la
+             * meme forme ni la meme signature que celle des agregateurs restant a
+             * integrer. Les faire tous pointers sur le controleur generique
+             * echouerait des la verification de signature, et le webhook resterait
+             * muet sans lever d'alarme.
+             *
+             * L'URL, elle, reste identique et lisible : c'est elle que
+             * l'operateur saisit une fois dans son tableau de bord, et elle ne
+             * doit pas changer parce que la maniere de traiter la notification a
+             * evolve.
+             */
+            $controller = $provider === PaymentProvider::FEDAPAY
+                ? FedapayWebhookController::class
+                : PaymentWebhookController::class;
+
+            Route::post('/'.$provider->value, [$controller, 'handle'])
                 ->defaults('provider', $provider->value)
                 /*
                  * Limiteur propre, plus large que celui de l'API generale : un
@@ -61,4 +74,22 @@ Route::prefix('payments/webhooks')
                 ->middleware('throttle:webhook')
                 ->name($provider->value);
         }
+
+        /*
+         | Depots d'argent.
+         |
+         | Chemin distinct de celui des encaissements, et non une seconde
+         | variante du meme : FedaPay notifie la sortie d'argent sur une adresse
+         | separee, qu'il faut donc declarer dans son tableau de bord, et le
+         | controleur est different parce que l'evenement dit autre chose. Un
+         | depot ne rend pas une commande payee, il la cloture.
+         |
+         | Aucun autre agregateur n'a de route ici tant que son passerelle de
+         | depot n'existe pas : une route qui repondrait 404 laisserait croire a
+         | une integration presente.
+         */
+        Route::post('/'.PaymentProvider::FEDAPAY->value.'/payouts', [FedapayPayoutWebhookController::class, 'handle'])
+            ->defaults('provider', PaymentProvider::FEDAPAY->value)
+            ->middleware('throttle:webhook')
+            ->name('fedapay.payouts');
     });
