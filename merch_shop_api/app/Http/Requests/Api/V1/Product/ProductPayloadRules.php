@@ -56,6 +56,8 @@ trait ProductPayloadRules
              */
             'image_url' => ['nullable', 'url', 'max:2048'],
 
+            'image' => ['nullable', 'image', 'max:5120'],
+
             /**
              * `whereNull('deleted_at')` : une catégorie supprimée logiquement
              * n'est pas une destination valide, alors que la ligne existe
@@ -225,6 +227,7 @@ trait ProductPayloadRules
             'name' => 'nom',
             'description' => 'description',
             'image_url' => 'photo du produit',
+            'image'     => 'photo du produit (fichier)',
             'category_id' => 'catégorie',
             'slug' => 'slug',
             'status' => 'statut',
