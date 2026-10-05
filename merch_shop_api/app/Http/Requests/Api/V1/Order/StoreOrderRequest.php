@@ -5,6 +5,7 @@ namespace App\Http\Requests\Api\V1\Order;
 use App\Enums\FulfillmentMethod;
 use App\Enums\PaymentMethod;
 use App\Http\Requests\ApiRequest;
+use App\Rules\PhoneNumber;
 use Illuminate\Validation\Rule;
 
 /**
@@ -45,6 +46,29 @@ final class StoreOrderRequest extends ApiRequest
             'items.*.uuid' => ['required', 'string', 'uuid', 'distinct'],
 
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:20'],
+
+            /*
+             * Identite de l'acheteur.
+             *
+             * Exigee pour toute commande, y compris en retrait, et c'est
+             * deliberement plus severe que l'adresse de livraison. Une adresse
+             * manque, on peut la demander au moment de servir ; un numero de
+             * telephone manque, et l'argent d'un remboursement n'a nulle part ou
+             * aller. Le refuser ici plutot qu'a la caisse evite d'apprendre la
+             * lecon — trop tard, et devant un client qui attend son argent.
+             */
+            'customer_name' => ['required', 'string', 'min:2', 'max:120'],
+
+            'customer_phone_number' => ['required', 'string', new PhoneNumber],
+
+            /*
+             * Le code pays n'est pas demande au client : il est impose par la
+             * regle du numero, et lu a la validation plutot que transmis. Le
+             * laisser saisir serait inviter a envoyer un depot a l'etranger, et
+             * il n'y a aucun operateur mobile money hors du pays qui pourrait
+             * le recevoir.
+             */
+            'customer_phone_country' => ['nullable', 'string', 'size:2'],
 
             'fulfillment_method' => ['required', Rule::enum(FulfillmentMethod::class)],
 
@@ -87,6 +111,10 @@ final class StoreOrderRequest extends ApiRequest
             'items.*.quantity.required' => 'Chaque ligne doit indiquer une quantite.',
             'items.*.quantity.min' => 'La quantite doit etre d’au moins 1.',
             'items.*.quantity.max' => 'La quantite maximale par article est de 20.',
+            'customer_name.required' => 'Le nom de l’acheteur est obligatoire.',
+            'customer_name.min' => 'Le nom de l’acheteur est trop court.',
+            'customer_phone_number.required' => 'Le numéro de téléphone est obligatoire.',
+            'customer_phone_country.size' => 'Le code pays doit comporter deux lettres.',
             'fulfillment_method.required' => 'Le mode de retrait est obligatoire.',
             'shipping_address.required_if' => 'Une adresse de livraison est obligatoire pour une livraison.',
             'shipping_address.min' => 'L’adresse de livraison est trop courte.',
@@ -104,6 +132,8 @@ final class StoreOrderRequest extends ApiRequest
             'items' => 'articles',
             'items.*.uuid' => 'variante',
             'items.*.quantity' => 'quantite',
+            'customer_name' => 'nom de l’acheteur',
+            'customer_phone_number' => 'numéro de téléphone',
             'fulfillment_method' => 'mode de retrait',
             'shipping_address' => 'adresse de livraison',
             'payment_method' => 'moyen de paiement',

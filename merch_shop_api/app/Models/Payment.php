@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'method',
     'provider',
     'transaction_id',
+    'checkout_url',
     'status',
     'paid_at',
     'failed_at',

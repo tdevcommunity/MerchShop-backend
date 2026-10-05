@@ -9,6 +9,7 @@ use App\Services\OrderService;
 use App\Services\PickupQrCodeService;
 use App\Support\Orders\OrderAccess;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -230,6 +231,12 @@ final class OrderResource extends ApiResource
      * ressource ne peut pas charger la relation a la demande : le faire
      * declencherait une requete par commande dans une liste, la ou le
      * controleur l'a deja chargee ou a choisi de s'en passer.
+     *
+     * Le type de retour est `CarbonInterface` et non `CarbonImmutable` parce que
+     * `created_at` est une colonne `timestamp` : Eloquent la rend en
+     * `Illuminate\Support\Carbon`, qui n'herite pas de `CarbonImmutable`.
+     * Annoncer cette derniere ferait echouer la ressource des la premiere
+     * commande rendue, sur toutes les reponses de commande de l'API.
      */
     private function latestPayment(Order $order): ?Payment
     {
@@ -237,7 +244,7 @@ final class OrderResource extends ApiResource
         $payments = $order->payments;
 
         return $payments->sortByDesc(
-            fn (Payment $payment): CarbonImmutable => $payment->created_at ?? CarbonImmutable::now(),
+            fn (Payment $payment): CarbonInterface => $payment->created_at ?? CarbonImmutable::now(),
         )->first();
     }
 

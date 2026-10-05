@@ -15,6 +15,7 @@ use App\Models\Variant;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use App\Repositories\Contracts\PaymentRepositoryInterface;
 use App\Repositories\Contracts\VariantRepositoryInterface;
+use App\Rules\PhoneNumber;
 use App\Support\Api\Money;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -86,13 +87,31 @@ final class OrderService
         ],
         OrderStatus::PAID->value => [
             OrderStatus::READY_FOR_PICKUP->value,
+            OrderStatus::REFUND_PENDING->value,
             OrderStatus::REFUNDED->value,
         ],
         OrderStatus::READY_FOR_PICKUP->value => [
             OrderStatus::PICKED_UP->value,
+            OrderStatus::REFUND_PENDING->value,
             OrderStatus::REFUNDED->value,
         ],
         OrderStatus::PICKED_UP->value => [
+            OrderStatus::REFUND_PENDING->value,
+            OrderStatus::REFUNDED->value,
+        ],
+
+        /*
+         * L'attente est une passerelle, pas un cul-de-sac : elle se referme soit
+         * sur un remboursement confirme, soit sur l'etat que la commande avait
+         * avant la demande lorsque l'operateur refuse le depot. Ces trois issues
+         * ne sont pas interchangeables — remettre une commande deja retiree a
+         * `paid` lui retirerait son droit de retrait alors qu'elle a ete servie,
+         * et le stand la servirait une seconde fois.
+         */
+        OrderStatus::REFUND_PENDING->value => [
+            OrderStatus::PAID->value,
+            OrderStatus::READY_FOR_PICKUP->value,
+            OrderStatus::PICKED_UP->value,
             OrderStatus::REFUNDED->value,
         ],
         OrderStatus::CANCELLED->value => [],
@@ -109,7 +128,7 @@ final class OrderService
     /**
      * Enregistre une commande, reserve le stock et ouvre la tentative de paiement.
      *
-     * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null}  $data
+     * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null, customer_name: string, customer_phone_number: string}  $data
      */
     public function create(array $data): Order
     {
@@ -165,6 +184,19 @@ final class OrderService
 
             $order = $this->createWithUniqueNumber([
                 'user_id' => ($data['user'] ?? null)?->id,
+
+                /*
+                 * Identite de l'acheteur, normalisee a la validation.
+                 *
+                 * Le numero est ecrit deja normalise plutot que tel qu'il a ete
+                 * saisi : c'est cette forme qui partira a l'operateur, et une
+                 * commande enregistree avec un numero illisible le resterait
+                 * toujours — un remboursement deux mois plus tard n'aurait alors plus
+                 * de donnee exploitable.
+                 */
+                'customer_name' => $data['customer_name'],
+                'customer_phone_number' => PhoneNumber::normalise($data['customer_phone_number']),
+                'customer_phone_country' => PhoneNumber::countryCode(),
                 'sub_total' => $subTotal,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'discount' => $discount,
@@ -278,9 +310,14 @@ final class OrderService
             $this->payments->forOrder($order)->each(function ($payment): void {
                 // Une tentative encore en attente est sans issue des lors que la
                 // commande est fermee : la laisser en attente ferait croire a un
-                // reglement possible.
+                // reglement possible. La date d'echec est ecrite comme lors d'un
+                // refus de l'operateur, pour que l'annulation ne se compte pas
+                // comme un paiement que le client aurait abandonne.
                 if ($payment->status === PaymentStatus::PENDING) {
-                    $payment->update(['status' => PaymentStatus::FAILED]);
+                    $payment->update([
+                        'status' => PaymentStatus::FAILED,
+                        'failed_at' => now(),
+                    ]);
                 }
             });
 
@@ -353,16 +390,33 @@ final class OrderService
      * Le stock revient en jeu : les articles n'ont pas ete distribues s'ils
      * n'ont pas ete retires, et les immobiliser ne servirait a rien.
      */
-    public function refund(Order $order): Order
+    /**
+     * La commande a-t-elle deja ete recouvree ?
+     *
+     * Cette methode ne demande plus l'argent : elle constate que la restitution
+     * a ete confirmee par l'operateur. La demande elle-meme appartient a
+     * `RefundService`, qui parle a l'operateur, et l'ordre des deux est
+     * imperative — le stock et le statut ne bougent qu'une fois l'argent sorti.
+     *
+     * Le retour a la commande vient apres la transaction, comme partout ailleurs
+     * dans ce service : la relecture y reapplique les relations, et l'ecriture
+     * doit etre etablie avant.
+     */
+    public function markRefunded(Order $order): Order
     {
-        return DB::transaction(function () use ($order): Order {
+        $committed = DB::transaction(function () use ($order): Order {
             $this->assertCanTransition($order, OrderStatus::REFUNDED);
 
             /*
              * Un article deja remis au participant n'est plus en stock : le
-             * remettre une fois de plus sellingrait deux fois la meme piece. La
+             * remettre une fois de plus revendrait deux fois la meme piece. La
              * restitution au stock ne concerne donc que ce qui est encore en
              * rayon au moment du remboursement.
+             *
+             * Elle n'a lieu qu'ici, et non a la demande : une demande de
+             * remboursement peut echouer chez l'operateur, et rendre le stock
+             * avant l'echec de l'appel laisserait des articles en rayon qui
+             * seraient aussi chez le client.
              */
             if ($order->status !== OrderStatus::PICKED_UP) {
                 $this->releaseStock($order);
@@ -376,8 +430,37 @@ final class OrderService
 
             $order->update(['status' => OrderStatus::REFUNDED]);
 
-            return $this->reload($order);
+            return $order;
         });
+
+        return $this->reload($committed);
+    }
+
+    /**
+     * L'operateur a refuse le depot : la commande reprend son etat d'avant.
+     *
+     * L'argent n'est jamais sorti, donc rien de ce que le remboursement avait
+     * prepare ne doit rester fait : ni le statut, ni le stock, ni le droit de
+     * retrait. Sans cet etat intermediaire, un echec de depot laisserait une
+     * commande « remboursee » dont l'acheteur n'a rien recu et dont le stand
+     * aurait rendu la marchandise.
+     *
+     * L'etat restitue est celui que la commande avait avant la demande, et non
+     * toujours `paid` : une commande deja prete ou deja retiree n'a pas perdu son
+     * paiement, et la renvoyer a `paid` lui retirerait le droit de retrait que
+     * le stand a deja honore.
+     */
+    public function markRefundFailed(Order $order, OrderStatus $previous = OrderStatus::PAID): Order
+    {
+        $committed = DB::transaction(function () use ($order, $previous): Order {
+            $this->assertCanTransition($order, $previous);
+
+            $order->update(['status' => $previous]);
+
+            return $order;
+        });
+
+        return $this->reload($committed);
     }
 
     /**
@@ -718,6 +801,7 @@ final class OrderService
             OrderStatus::PICKED_UP => 'retirée',
             OrderStatus::CANCELLED => 'annulée',
             OrderStatus::REFUNDED => 'remboursée',
+            OrderStatus::REFUND_PENDING => 'remboursement en attente',
         };
     }
 }

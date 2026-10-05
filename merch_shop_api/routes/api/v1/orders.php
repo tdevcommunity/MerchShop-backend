@@ -67,6 +67,25 @@ Route::get('/orders/{uuid}', [OrderController::class, 'show'])->whereUuid('uuid'
 Route::get('/orders/{uuid}/qr', [OrderPickupController::class, 'qrCode'])->whereUuid('uuid')->name('orders.qr');
 
 /*
+ | Ouverture du paiement d'une commande.
+ |
+ | Elle est publique, comme la lecture, parce qu'elle sert au meme public : un
+ | invite vient de creer sa commande sans compte et doit pouvoir la payer. Son
+ | autorisation est donc celle de `show` — la session, ou le jeton de la commande
+ | — et non une session obligatoire qui la rendrait inaccessible a la moitié des
+ | acheteurs.
+ |
+ | Son propre limiteur, distinct de celui du passage de commande : les deux routes
+ | reservent une ressource externe, mais payer consomme des credits chez
+ | l'operateur. Les confondre ferait partager un quota qui n'a aucun rapport
+ | entre les deux.
+ */
+Route::post('/orders/{uuid}/payment', [OrderController::class, 'pay'])
+    ->middleware('throttle:payment')
+    ->whereUuid('uuid')
+    ->name('orders.pay');
+
+/*
  | Guichet : file d'attente et lecture du QR.
  |
  | Le middleware `auth` est pose ici et non delegue a la policy, parce qu'il
@@ -99,6 +118,7 @@ Route::middleware('auth')->group(function (): void {
           | compte annule donc par le guichet, qui est la voie prevue pour lui.
          */
         Route::post('/{uuid}/cancel', [OrderController::class, 'cancel'])->whereUuid('uuid')->name('cancel');
+        Route::post('/{uuid}/refund', [OrderController::class, 'refund'])->whereUuid('uuid')->name('refund');
         Route::post('/{uuid}/ready', [OrderPickupController::class, 'markReady'])->whereUuid('uuid')->name('ready');
         Route::post('/{uuid}/picked-up', [OrderPickupController::class, 'markPickedUp'])->whereUuid('uuid')->name('picked-up');
     });

@@ -28,13 +28,17 @@ final class EloquentPaymentRepository extends EloquentRepository implements Paym
     {
         return $this->query()
             ->with('order')
+            ->lockForUpdate()
             ->where($this->routeKeyName(), $id)
             ->first();
     }
 
     public function findByTransactionId(string $transactionId): ?Payment
     {
-        return $this->query()->where('transaction_id', $transactionId)->first();
+        return $this->query()
+            ->lockForUpdate()
+            ->where('transaction_id', $transactionId)
+            ->first();
     }
 
     public function forOrder(Order $order): Collection

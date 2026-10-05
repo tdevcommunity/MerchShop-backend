@@ -64,6 +64,16 @@ return [
         'checkout_per_minute' => (int) env('API_THROTTLE_CHECKOUT_PER_MINUTE', 20),
 
         /*
+         * Ouverture d'un paiement : route publique elle aussi, puisqu'un invite
+         * paie avec le jeton qu'il a recu. Elle est en revanche bien plus
+         * sensible que le passage de commande, car chaque appel consomme un
+         * credits chez l'operateur. Le seau reste large pour un client qui
+         * change de reseau mobile et recommence, et bas pour qu'un script ne
+         * puisse pas ouvrir des transactions a la place des festivaliers.
+         */
+        'payment_per_minute' => (int) env('API_THROTTLE_PAYMENT_PER_MINUTE', 10),
+
+        /*
          * Notifications d'operateur : large, parce qu'un agregateur rejoue en
          * rafale apres une coupure. Ce plafond protege d'un envoi massif
          * depuis une seule adresse, pas d'un fonctionnement normal.

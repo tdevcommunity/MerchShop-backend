@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Enums\PaymentProvider;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Repositories\Contracts\CategoryRepositoryInterface;
@@ -10,6 +11,7 @@ use App\Repositories\Contracts\InvoiceRepositoryInterface;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use App\Repositories\Contracts\PaymentRepositoryInterface;
 use App\Repositories\Contracts\ProductRepositoryInterface;
+use App\Repositories\Contracts\RefundRepositoryInterface;
 use App\Repositories\Contracts\UserRepositoryInterface;
 use App\Repositories\Contracts\VariantRepositoryInterface;
 use App\Repositories\Eloquent\EloquentCategoryRepository;
@@ -18,8 +20,13 @@ use App\Repositories\Eloquent\EloquentInvoiceRepository;
 use App\Repositories\Eloquent\EloquentOrderRepository;
 use App\Repositories\Eloquent\EloquentPaymentRepository;
 use App\Repositories\Eloquent\EloquentProductRepository;
+use App\Repositories\Eloquent\EloquentRefundRepository;
 use App\Repositories\Eloquent\EloquentUserRepository;
 use App\Repositories\Eloquent\EloquentVariantRepository;
+use App\Services\Payments\FedapayGateway;
+use App\Services\Payments\FedapayPayoutGateway;
+use App\Services\Payments\PaymentGatewayRegistry;
+use App\Services\Payments\PayoutGatewayRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -50,6 +57,32 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(OrderRepositoryInterface::class, EloquentOrderRepository::class);
         $this->app->bind(PaymentRepositoryInterface::class, EloquentPaymentRepository::class);
         $this->app->bind(InvoiceRepositoryInterface::class, EloquentInvoiceRepository::class);
+        $this->app->bind(RefundRepositoryInterface::class, EloquentRefundRepository::class);
+
+        /*
+         * Passerelles de paiement.
+         *
+         * Elles sont declarees par agregateur plutot que resolues par nommage,
+         * parce qu'un agregateur n'a pas toujours d'implementation : KKiaPay,
+         * PayGate, Flooz et T-Money sont des routes reservees a leur future
+         * passerelle, et les inscrire ici reviendrait a annoncer une
+         * integration qui n'existe pas.
+         */
+        $this->app->singleton(PaymentGatewayRegistry::class, fn (): PaymentGatewayRegistry => new PaymentGatewayRegistry([
+            PaymentProvider::FEDAPAY->value => FedapayGateway::class,
+        ]));
+
+        /*
+         * Passerelles de restitution.
+         *
+         * Registre separe de celui des encaissements : un agregateur peut
+         * accepter des paiements sans proposer de depot, et inscrire la meme
+         * classe dans les deux registres ferait dependre une restitution d'une
+         * passerelle qui n'en assure que la moitie.
+         */
+        $this->app->singleton(PayoutGatewayRegistry::class, fn (): PayoutGatewayRegistry => new PayoutGatewayRegistry([
+            PaymentProvider::FEDAPAY->value => FedapayPayoutGateway::class,
+        ]));
     }
 
     /**
@@ -125,6 +158,17 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('checkout', fn (Request $request) => Limit::perMinute(
             (int) config('api.throttle.checkout_per_minute'),
         )->by($this->rateLimitKey($request, 'checkout')));
+
+        /*
+         * Ouverture d'un paiement : meme cle de seau que le passage de
+         * commande, IP tant qu'aucune session n'existe. Elle est separee parce
+         * que les deux routes n'ont pas le meme cout : commander reserve du
+         * stock, payer consomme des credits chez l'operateur. Les confondre
+         * ferait partager un quota qui n'a aucun rapport entre eux.
+         */
+        RateLimiter::for('payment', fn (Request $request) => Limit::perMinute(
+            (int) config('api.throttle.payment_per_minute'),
+        )->by($this->rateLimitKey($request, 'payment')));
 
         /*
          * Notifications d'operateur : plafond par IP, plus large que celui de
