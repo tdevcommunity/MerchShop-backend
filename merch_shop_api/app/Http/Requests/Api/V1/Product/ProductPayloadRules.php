@@ -53,9 +53,21 @@ trait ProductPayloadRules
              *
              * Elle reste facultative : un produit sans photo est publiable, la
              * boutique affichant un cadre vide a la place.
+             *
+             * Priorité : si `image` (fichier) est fourni en même temps que
+             * `image_url`, le fichier est uploadé sur Cloudinary et l'URL
+             * résultante remplace image_url. N'envoyez pas les deux.
              */
             'image_url' => ['nullable', 'url', 'max:2048'],
 
+            /**
+             * Fichier image à uploader automatiquement sur Cloudinary.
+             *
+             * Prioritaire sur image_url : si ce champ est présent et que
+             * l'upload réussit, image_url est écrasé avec le secure_url retourné
+             * par Cloudinary. Si l'upload échoue, image_url est conservé.
+             * Max : 5 Mo (5120 Ko).
+             */
             'image' => ['nullable', 'image', 'max:5120'],
 
             /**

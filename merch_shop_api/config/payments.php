@@ -43,6 +43,6 @@ return [
     |
     */
 
-    'callback_url' => env('PAYMENT_CALLBACK_URL'),
+    'return_url' => env('PAYMENT_RETURN_URL'),
 
 ];

@@ -35,7 +35,7 @@ class OrderPaymentTest extends TestCase
     {
         parent::setUp();
 
-        config()->set('payments.callback_url', 'https://boutique.exemple.test/retour');
+        config()->set('payments.return_url', 'https://boutique.exemple.test/retour');
 
         $this->gateway = new FakePaymentGateway;
 
@@ -194,7 +194,7 @@ class OrderPaymentTest extends TestCase
 
     public function test_it_refuses_to_open_a_payment_without_a_return_address(): void
     {
-        config()->set('payments.callback_url', null);
+        config()->set('payments.return_url', null);
 
         $order = $this->pendingOrder($this->customer());
 
@@ -253,7 +253,7 @@ class OrderPaymentTest extends TestCase
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

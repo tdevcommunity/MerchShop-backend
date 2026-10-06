@@ -43,10 +43,11 @@ final class FedapayGateway implements PaymentGateway
      * FedaPay ne renvoie pas d'URL a la creation — la transaction commence en
      * attente — c'est la generation du jeton qui produit la page a ouvrir.
      *
-     * Notre uuid de paiement voyage dans les metadonnees. FedaPay genere
-     * lui-meme une reference, non modifiable a la creation, et elle n'existe
-     * qu'apres l'appel : c'est donc le seul endroit ou une valeur choisie par
-     * l'API peut etre restituee dans un webhook.
+     * Notre uuid de paiement voyage deux fois : en `merchant_reference`, que
+     * FedaPay indexe et rend requetable, et dans les metadonnees, que la
+     * notification restitue. La reference qu'il genere de lui-meme n'est ni
+     * modifiable ni connue avant l'appel : elle ne peut donc pas etre annoncee
+     * en amont, et c'est elle qu'on conserve comme repli de rapprochement.
      */
     public function initiate(Payment $payment, string $callbackUrl): PaymentIntent
     {
@@ -73,9 +74,32 @@ final class FedapayGateway implements PaymentGateway
                 'currency' => ['iso' => $order->currency],
                 'callback_url' => $callbackUrl,
                 'customer' => ['id' => $customerId],
+
+                /*
+                 * Reference marchande, choisie par nous.
+                 *
+                 * FedaPay genere sa propre reference et la rend immuable, mais il
+                 * accepte qu'on en donne une, et il expose alors une recherche
+                 * dediee (`GET /transactions/merchant/{reference}`). Les
+                 * metadonnees ci-dessous ne font que l'accompagner : elles sont
+                 * un objet libre, dont la restitution depend de l'operateur et
+                 * que rien ne garantit de revenir dans la notification. La
+                 * reference marchande, elle, est un champ a part entiere de la
+                 * transaction, donc toujours present et toujours requetable.
+                 *
+                 * Elle porte l'uuid du paiement, et non le numero de commande :
+                 * une commande a plusieurs tentatives, et c'est la tentative qui
+                 * doit se retrouver chez l'operateur. FedaPay refuse une
+                 * reference deja utilisee, ce qui est ici le comportement voulu —
+                 * deux appels sur le meme paiement reutilisent le lien deja
+                 * emis, et une reference dupliquee signalerait une tentative
+                 * d'encaissement supplantoire.
+                 */
+                'merchant_reference' => $payment->uuid,
                 'custom_metadata' => [
                     'payment_uuid' => $payment->uuid,
                     'order_number' => $order->order_number,
+                    'order_uuid' => $order->uuid,
                 ],
             ]);
 

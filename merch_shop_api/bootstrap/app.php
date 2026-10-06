@@ -69,6 +69,20 @@ return Application::configure(basePath: dirname(__DIR__))
             StartSession::class,
             PreventRequestForgery::class,
         ]);
+
+        /*
+         * Alias du contrôle d'accès au back-office.
+         *
+         * Enregistré comme alias et non appliqué directement dans les fichiers de
+         * routes, parce que la question qu'il pose — « ce compte entre-t-il dans
+         * le back-office ? » — est la meme partout, alors que les permissions
+         * individuelles, elles, dépendent de la route et donc du contrôleur.
+         * L'alias garantit qu'aucune route d'administration ne puisse être
+         * ajoutée sans lui : un oubli serait un endpoint public.
+         */
+        $middleware->alias([
+            'backoffice' => \App\Http\Middleware\EnsureBackoffice::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

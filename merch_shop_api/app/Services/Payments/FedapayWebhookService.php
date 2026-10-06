@@ -46,11 +46,20 @@ final class FedapayWebhookService
     /**
      * Etats FedaPay qui signifient que l'argent ne sera pas encaisse.
      *
+     * `expired` y figure avec `declined` et `canceled`, et c'est ce que la
+     * documentation permet de conclure : une collecte que le client n'a pas
+     * finalisee expire seule au bout de vingt-quatre heures. La traiter comme
+     * inconnue — ce qu'elle etait — renvoyait un 422 que FedaPay rejouait en
+     * boucle, pour une transaction dont le sort etait deja tranche : l'argent
+     * n'etait pas encaisse, et le bruit reconduisait sans fin sur une erreur
+     * qui n'en etait pas une.
+     *
      * @var array<string, PaymentStatus>
      */
     private const UNSETTLED = [
         'declined' => PaymentStatus::FAILED,
         'canceled' => PaymentStatus::FAILED,
+        'expired' => PaymentStatus::FAILED,
     ];
 
     /**
@@ -192,11 +201,20 @@ final class FedapayWebhookService
      * n'en fournit pas dans l'evenement : c'est donc son propre vocabulaire qui
      * est conserve, plutot qu'un motif vide que l'analyse ne pourrait pas
      * distinguer d'un abandon.
+     *
+     * Trois motifs et non deux, parce que `expired` partage avec `canceled` un
+     * etat interne sans partager sa cause : rien ne distingue l'acheteur qui a
+     * change d'avis de celui qui a laisse le lien expirer sans jamais l'ouvrir.
+     * Les confondre attribuerait au second une annulation qu'il n'a pas
+     * demandee, et qui apparaitrait dans le suivi des abandons comme un refus de
+     * sa part.
      */
     private function reason(FedapayEvent $event): string
     {
-        return strtolower($event->status) === 'declined'
-            ? 'Refus du prestataire de paiement.'
-            : 'Paiement annule chez le prestataire de paiement.';
+        return match (strtolower($event->status)) {
+            'declined' => 'Refus du prestataire de paiement.',
+            'expired' => 'Paiement non finalise : la collecte a expire chez le prestataire de paiement.',
+            default => 'Paiement annule chez le prestataire de paiement.',
+        };
     }
 }

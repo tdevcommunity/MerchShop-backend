@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\Order\PickupScanRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\OrderService;
 use App\Services\PickupQrCodeService;
 use App\Support\Orders\OrderAccess;
@@ -73,7 +74,7 @@ final class OrderPickupController extends ApiController
 
         $this->pickupQrCodes->assertServable($order);
 
-        return OrderResource::make($this->orders->markPickedUp($order));
+        return OrderResource::make($this->orders->markPickedUp($order, $this->agent($request)));
     }
 
     /**
@@ -89,7 +90,29 @@ final class OrderPickupController extends ApiController
 
         $this->authorize('operate', $order);
 
-        return OrderResource::make($this->orders->markPickedUp($order));
+        return OrderResource::make($this->orders->markPickedUp($order, $this->agent($request)));
+    }
+
+    /**
+     * Le guichetier derriere la requete.
+     *
+     * Le compte vient de la session, jamais du corps de la requete : un guichet
+     * qui pourrait declarer avoir servi la commande au nom d'un autre rendrait
+     * la colonne « servi par » sans valeur, ce qui est la seule chose qu'elle
+     * demande.
+     *
+     * Nullable parce que la session peut avoir expire entre le middleware et
+     * cette ligne — un poste de stand ouvert depuis le matin. La commande est
+     * alors servie sans auteur plutot que refusee : l'article est sorti, et
+     * bloquer sa sortie sur une session expiree echouerait le client qui attend
+     * au comptoir. L'absence reste visible dans la reponse, donc traçable.
+     */
+    private function agent(Request $request): ?User
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        return $user;
     }
 
     /**

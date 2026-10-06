@@ -78,9 +78,30 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    /*
+     | French, and French by default.
+     |
+     | La valeur par defaut est `fr` et non `en` parce que c'est la seule langue
+     | dans laquelle cette application parle a quelqu'un. Un festival se tient a
+     | Lome, le stand est tenu par des guichetiers qui n'ont pas de raison de
+     | lire de l'anglais, et un message « The name field is required » devant un
+     | client est un message que personne ne traite.
+     |
+     | La variable reste lisible, pour qu'un deroiement dans une autre langue
+     | n'exige pas de toucher au depot. Elle est absente de `.env` volontairement :
+     | un developpeur qui clone le projet obtient le francais sans avoir a
+     | recopier une valeur, parce que le defaut du depot est deja le bon.
+     |
+     | `lang/fr/` ne contient que `validation.php`, et c'est suffisant : les
+     | autres fichiers (`auth`, `passwords`, `pagination`) sont fournis par le
+     | framework et retombent sur ses chaines anglaises. Le fallback est donc
+     | laisse a `fr` aussi — avec un fallback anglais, une regle absente
+     | afficherait de l'anglais au milieu de messages francais, ce qui est le
+     | pire des deux mondes.
+     */
+    'locale' => env('APP_LOCALE', 'fr'),
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'fr'),
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 

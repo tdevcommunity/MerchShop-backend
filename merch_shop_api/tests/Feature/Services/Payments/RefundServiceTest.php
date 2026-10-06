@@ -168,8 +168,8 @@ final class RefundServiceTest extends TestCase
 
         app(RefundService::class)->request($order);
 
-        $this->assertSame('0707070707', $gateway->sentPhone);
-        $this->assertSame('ci', $gateway->sentCountry);
+        $this->assertSame('90123456', $gateway->sentPhone);
+        $this->assertSame('tg', $gateway->sentCountry);
     }
 
     public function test_it_refuses_an_order_that_was_never_paid(): void
@@ -304,7 +304,7 @@ final class RefundServiceTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

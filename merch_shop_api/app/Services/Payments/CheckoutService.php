@@ -94,7 +94,7 @@ final class CheckoutService
             return $payment;
         }
 
-        $callbackUrl = config('payments.callback_url');
+        $callbackUrl = config('payments.return_url');
 
         if (! is_string($callbackUrl) || $callbackUrl === '') {
             throw new ApiException(

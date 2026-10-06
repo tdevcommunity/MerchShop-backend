@@ -2,7 +2,9 @@
 
 namespace App\Repositories\Contracts;
 
+use App\Enums\FulfillmentMethod;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -48,6 +50,32 @@ interface OrderRepositoryInterface extends RepositoryInterface
      * @return LengthAwarePaginator<int, Order>
      */
     public function paginateForPickup(int $perPage): LengthAwarePaginator;
+
+    /**
+     * Toutes les commandes, tous clients confondus.
+     *
+     * Reservee au back-office, et c'est la seule requete de cette interface qui
+     * ne filtre pas sur un proprietaire. Les trois autres ont chacune leur
+     * justification — un client, une file de stand — et celle-ci en a une aussi :
+     * le guichet doit repondre a « ou est la commande MS-0402 ? » alors qu'elle
+     * a ete passee sans compte, donc sans proprietaire a filtrer.
+     *
+     * Les filtres sont volontairement transmis tels quels plutot que traduits
+     * ici : le service a deja resolu les valeurs en enum, et c'est a lui que
+     * revient la lecture du vocabulaire demande. Un filtre inconnu ne doit pas
+     * etreignore en silence, et il ne peut pas l'etre ici.
+     *
+     * `q` ne porte que sur des colonnes de la commande — numero, nom et numero
+     * de l'acheteur. Il ne cherche pas dans les lignes du panier : une commande
+     * ne se retrouve pas par « le tee-shirt » au guichet, on la retrouve par son
+     * numero ou par le nom de la personne qui l'a passee. Ajouter la jointure
+     * qui rendrait cette recherche possible coûterait un `distinct` sur la liste
+     * complete, pour une recherche que personne ne fait au stand.
+     *
+     * @param  array{status?: OrderStatus|null, paymentStatus?: PaymentStatus|null, fulfillment?: FulfillmentMethod|null, q?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Order>
+     */
+    public function paginateForBackoffice(int $perPage, array $filters = []): LengthAwarePaginator;
 
     /**
      * Commande designee par l'empreinte de son jeton de retrait.

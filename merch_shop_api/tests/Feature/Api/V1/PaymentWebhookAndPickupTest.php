@@ -321,7 +321,7 @@ class PaymentWebhookAndPickupTest extends TestCase
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

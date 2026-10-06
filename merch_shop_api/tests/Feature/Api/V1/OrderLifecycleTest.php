@@ -401,7 +401,7 @@ class OrderLifecycleTest extends TestCase
             'shipping_address' => $fulfillmentMethod === FulfillmentMethod::DELIVERY ? 'Lome' : null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

@@ -174,6 +174,55 @@ class FedapayWebhookTest extends TestCase
         $this->assertSame(PaymentStatus::FAILED, $payment->refresh()->status);
     }
 
+    public function test_it_treats_an_expired_collect_as_a_failure_rather_than_a_status_it_does_not_know(): void
+    {
+        /*
+         * FedaPay expire d'elle-meme une collecte restee en attente, et le
+         * statut `expired` accompagne cette notification. Le refuser renvoyait un
+         * 422 sur une transaction dont le sort etait tranche : l'operateur
+         * rejouait la notification en boucle, pour un paiement dont l'argent
+         * n'etait de toute facon pas encaisse.
+         *
+         * Le 200 compte autant que l'ecriture : c'est lui qui arrete la
+         * rejouee. Capter la commande comme etant en echec laisse par ailleurs
+         * au client la possibilite de recommencer, la tentative_close n'etant
+         * plus reutilisable.
+         */
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+
+        $this->send($this->event('transaction.updated', $payment, 'expired'))
+            ->assertOk()
+            ->assertJsonPath('data.status', OrderStatus::PENDING_PAYMENT->value);
+
+        $payment->refresh();
+
+        $this->assertSame(PaymentStatus::FAILED, $payment->status);
+        $this->assertNull($payment->paid_at);
+        $this->assertNotNull($payment->failed_at);
+        $this->assertSame(OrderStatus::PENDING_PAYMENT, $order->refresh()->status);
+    }
+
+    public function test_it_does_not_record_an_expired_collect_as_a_cancellation_by_the_client(): void
+    {
+        /*
+         * L'expiration et l'annulation partagent un etat interne sans
+         * partager leur cause : personne n'a demande l'une. Le plan de tracking
+         * lit cette cause dans `failure_reason`, donc confondre les deux
+         * attribuerait a un acheteur qui a abandonne une annulation qu'il n'a
+         * pas faite.
+         */
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+
+        $this->send($this->event('transaction.updated', $payment, 'expired'))->assertOk();
+
+        $reason = $payment->refresh()->failure_reason;
+
+        $this->assertStringContainsString('expire', $reason);
+        $this->assertStringNotContainsString('annule', $reason);
+    }
+
     public function test_it_acknowledges_a_transaction_still_pending_without_writing_anything(): void
     {
         $order = $this->pendingOrder();
@@ -549,7 +598,7 @@ class FedapayWebhookTest extends TestCase
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
 

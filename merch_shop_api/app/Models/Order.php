@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'fulfillment_method',
     'pickup_status',
     'pickup_time',
+    'picked_up_by_user_id',
     'pickup_token_hash',
     'guest_access_token_hash',
     'participant_id',
@@ -55,6 +56,23 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Le guichetier qui a servi la commande.
+     *
+     * Distinct de `user`, qui est l'acheteur : les deux comptes ne se confondent
+     * jamais, mais ils se ressemblent assez pour qu'une confusion soit tentante
+     * au moment de relire le modele. Nommer la relation par son role evite.
+     *
+     * Nullable pour la raison ecrite dans la migration : la commande peut avoir
+     * ete livree, ou pas encore servie.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function pickupAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'picked_up_by_user_id');
     }
 
     /**

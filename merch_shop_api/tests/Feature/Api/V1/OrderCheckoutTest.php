@@ -122,7 +122,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => 'Rue des Palmiers, Lome',
             'payment_method' => PaymentMethod::CARD,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
 
@@ -185,7 +185,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }
@@ -204,7 +204,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
 
@@ -262,7 +262,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
 
@@ -280,7 +280,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => 'PART-2026-0042',
         ]);
 
@@ -299,7 +299,7 @@ class OrderCheckoutTest extends TestCase
             'shipping_address' => null,
             'payment_method' => PaymentMethod::MOBILE_MONEY,
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

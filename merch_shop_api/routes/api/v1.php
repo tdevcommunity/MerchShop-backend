@@ -20,3 +20,4 @@ require __DIR__.'/v1/catalog.php';
 require __DIR__.'/v1/orders.php';
 require __DIR__.'/v1/webhooks.php';
 require __DIR__.'/v1/analytics.php';
+require __DIR__.'/v1/admin.php';
