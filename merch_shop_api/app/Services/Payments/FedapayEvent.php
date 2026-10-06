@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Exceptions\ApiException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Un evenement FedaPay, lu et traduit.
@@ -183,7 +184,13 @@ final readonly class FedapayEvent
      */
     public function concernsTransaction(): bool
     {
-        return $this->name === '' || str_starts_with($this->name, 'transaction.');
+        if (str_starts_with($this->name, 'transaction.')) {
+            return true;
+        }
+
+        Log::warning('FedaPay: nom d\'événement inattendu', ['name' => $this->name]);
+
+        return false;
     }
 
     /**

@@ -199,12 +199,62 @@ return [
     | Noms d'attributs personnalisés
     |--------------------------------------------------------------------------
     |
-    | Remplace le placeholder `:attribute` par un libellé lisible. Ces noms
-    | sont déclarés dans la méthode `attributes()` de chaque FormRequest plutôt
-    | qu'ici, pour rester au plus près des règles qu'ils nomment.
+    | Remplace le placeholder `:attribute` par un libellé lisible. Sans cela,
+    | le message affiche la clé de la colonne telle qu'elle est ecrite en base :
+    | « Le champ password doit contenir au moins 10 caractères » parle a un
+    | guichetier d'un champ qu'il ne cherche dans aucun formulaire.
+    |
+    | Deux mécanismes coexistent, volontairement.
+    |
+    | Les regles qui vivent dans une classe — les `ApiRequest` — portent leurs
+    | libelles dans leur methode `attributes()`, au plus pres des regles qu'ils
+    | nomment. C'est le cas ou le libelle change avec la regle : un `status`
+    | d'un `StoreProductRequest` n'est pas le meme mot qu'un `status` d'une
+    | invitation.
+    |
+    | Les regles validees en ligne, par `$request->validate()` dans un
+    | controleur, n'ont pas de classe ou mettre ce tableau. Elles sont donc
+    | nommees ici. La liste couvre exactement les controleurs du back-office,
+    | qui sont les seuls a valider ainsi — le reste de l'API passe par des
+    | `ApiRequest`.
+    |
+    | Un libelle d'un ecran n'est donc declare qu'une fois. Le recopier dans le
+    | tableau global et dans la classe laisserait deux endroits a tenir, et le
+    | second finit toujours par diverger du premier.
     |
     */
 
-    'attributes' => [],
+    'attributes' => [
+        // Comptes de guichet.
+        'firstname' => 'prénom',
+        'lastname' => 'nom',
+        'email' => 'adresse e-mail',
+        'phone' => 'numéro de téléphone',
+        'password' => 'mot de passe',
+        'role' => 'rôle',
+        'status' => 'état du compte',
+
+        // Commandes.
+        'fulfillment_method' => 'mode de retrait',
+        'payment_method' => 'moyen de paiement',
+        'variant' => 'déclinaison',
+        'reason' => 'motif',
+        'note' => 'note',
+
+        // Stock.
+        'delta' => 'quantité à ajuster',
+        'level' => 'niveau de stock',
+
+        // Paiements et recherche.
+        'provider' => 'prestataire de paiement',
+        'method' => 'moyen de paiement',
+        'resource' => 'ressource',
+        'resource_id' => 'identifiant de la ressource',
+        'action' => 'action',
+        'user' => 'compte',
+        'q' => 'recherche',
+        'failures_days' => 'nombre de jours',
+        'failures_since' => 'date à partir de laquelle',
+    ],
 
 ];

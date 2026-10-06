@@ -9,6 +9,7 @@ use App\Http\Requests\Api\V1\Product\UpdateProductRequest;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\VariantResource;
 use App\Models\Product;
+use App\Services\CloudinaryService;
 use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class ProductController extends ApiController
 {
-    public function __construct(private readonly ProductService $products) {}
+    public function __construct(
+        private readonly ProductService    $products,
+        private readonly CloudinaryService $cloudinary,
+    ) {}
 
     /**
      * Liste paginee du catalogue.
@@ -95,7 +99,16 @@ final class ProductController extends ApiController
     {
         $this->authorize('create', Product::class);
 
-        $product = $this->products->create($request->body());
+        $body = $request->body();
+
+        if ($request->hasFile('image')) {
+            $uploaded = $this->cloudinary->upload($request->file('image'));
+            if ($uploaded !== null) {
+                $body['image_url'] = $uploaded;
+            }
+        }
+
+        $product = $this->products->create($body);
 
         return $this->jsonResource(ProductResource::make($product), Response::HTTP_CREATED);
     }
@@ -106,7 +119,18 @@ final class ProductController extends ApiController
 
         $this->authorize('update', $product);
 
-        return ProductResource::make($this->products->update($product, $request->body()));
+        $body = $request->body();
+
+        if ($request->hasFile('image')) {
+            $uploaded = $this->cloudinary->upload($request->file('image'));
+            if ($uploaded !== null) {
+                $body['image_url'] = $uploaded;
+            }
+            // Si upload échoue ET qu'aucune image_url n'est fournie dans le body,
+            // on ne touche pas à la photo existante du produit.
+        }
+
+        return ProductResource::make($this->products->update($product, $body));
     }
 
     public function destroy(string $uuid): JsonResponse

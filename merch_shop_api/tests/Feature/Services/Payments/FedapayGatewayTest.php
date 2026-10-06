@@ -103,9 +103,20 @@ class FedapayGatewayTest extends TestCase
         $sent = $client->lastCallTo('#^/v\d+/transactions$#')['params'];
 
         $this->assertSame(
-            ['description', 'amount', 'currency', 'callback_url', 'customer', 'custom_metadata'],
+            ['description', 'amount', 'currency', 'callback_url', 'customer', 'merchant_reference', 'custom_metadata'],
             array_keys($sent)
         );
+
+        /*
+         * La reference marchande porte le paiement, pas la commande.
+         *
+         * C'est elle que FedaPay indexe et rend requetable. Si elle portait le
+         * numero de commande, une commande payee en deux fois ne pourrait plus
+         * etre retrouvee chez l'operateur : la seconde tentative ecrase la
+         * premiere, et le rapprochement ne dit plus laquelle des deux a ete
+         * honoree.
+         */
+        $this->assertSame($payment->uuid, $sent['merchant_reference']);
     }
 
     public function test_it_returns_the_reference_that_the_notification_will_carry(): void
@@ -263,7 +274,7 @@ class FedapayGatewayTest extends TestCase
     {
         $order = $this->pendingOrder();
 
-        config()->set('payments.callback_url', 'https://boutique.exemple.test/retour');
+        config()->set('payments.return_url', 'https://boutique.exemple.test/retour');
 
         $payment = app(CheckoutService::class)->start($order);
         $payment->refresh();
@@ -316,7 +327,7 @@ class FedapayGatewayTest extends TestCase
                         'id' => self::CUSTOMER_ID,
                         'firstname' => 'Awa',
                         'lastname' => 'Diallo',
-                        'phone_number' => ['number' => '0707070707', 'country' => 'ci'],
+                        'phone_number' => ['number' => '90123456', 'country' => 'tg'],
                     ],
                 ],
             ],
@@ -357,7 +368,7 @@ class FedapayGatewayTest extends TestCase
             'shipping_address' => null,
             'payment_method' => 'mobile_money',
             'customer_name' => 'Awa Diallo',
-            'customer_phone_number' => '0707070707',
+            'customer_phone_number' => '90123456',
             'participant_id' => null,
         ]);
     }

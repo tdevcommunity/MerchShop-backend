@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\FulfillmentMethod;
+use App\Enums\OrderStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Services\OrderService;
@@ -82,6 +83,52 @@ final class OrderResource extends ApiResource
             'pickupStatus' => $order->pickup_status?->value,
             'pickupTime' => $order->pickup_time?->toIso8601String(),
 
+            /*
+             * Qui a servi la commande.
+             *
+             * Distinct du client, qui n'est pas expose ici, et c'est la seule
+             * distinction qui compte : les deux sont des comptes `User`, et les
+             * confondre au moment d'afficher un nom serait une faute qui ne se
+             * voit pas — les deux sont « un nom d'utilisateur ».
+             *
+             * La relation est chargee par le service au moment du service, donc
+             * presente sur une commande servie. Elle ne l'est pas sur une
+             * commande seulement lue : la ligne est alors absente plutot que
+             * nulle, ce qui distingue « pas encore servie » de « servie par
+             * quelqu'un dont le compte a disparu » — deux situations qu'il faut
+             * pouvoir differencier dans un etat de stock.
+             */
+            'pickupAgent' => $this->when(
+                $order->relationLoaded('pickupAgent'),
+                fn (): array => [
+                    'id' => $order->pickupAgent?->uuid,
+                    'name' => $order->pickupAgent?->fullName(),
+                    'email' => $order->pickupAgent?->email,
+                ],
+            ),
+
+            /*
+             * Identite de l'acheteur.
+             *
+             * Elle est recopiee sur la commande, et non lue depuis le compte,
+             * parce qu'une commande invitee n'a pas de compte : sans cette copie,
+             * la moitie du festival — les commandes passees sans s'identifier —
+             * n'aurait aucun nom ni aucun numero a showing au guichet. C'est
+             * aussi ce qui rend un remboursement possible.
+             *
+             * Le nom est expose tel quel, dans la forme qui a ete saisie, et le
+             * numero dans sa forme nationale sans indicatif. Une commande lue par
+             * son proprietaire ne lui apprend donc rien qu'il ne sache deja, et
+             * `phoneCountry` reste disponible pour qui doit composer le numero
+             * chez l'operateur.
+             *
+             * L'adresse n'est pas ici : elle vit dans `shippingAddress`, ou elle
+             * est deja, et la dupliquer donnerait deux endroits a corriger.
+             */
+            'customerName' => $order->customer_name,
+            'customerPhoneNumber' => $order->customer_phone_number,
+            'customerPhoneCountry' => $order->customer_phone_country,
+
             'participantId' => $order->participant_id,
 
             'subTotal' => $order->sub_total,
@@ -120,9 +167,18 @@ final class OrderResource extends ApiResource
              * information, et les confondre ferait disparaitre des commandes d'un
              * rapport au lieu d'y indiquer une donnee manquante.
              */
+            /*
+             * `PaymentStatus` est un enum a backing int : son `value` est un
+             * entier, comme celui de `OrderStatus` deux lignes plus haut. Ecrire
+             * `?string` ici ne signalait donc pas une intention, seulement une
+             * conversion : le JSON renvoyait `"1"` la ou le meme champ vaut `1`
+             * partout ailleurs dans l'API. Un client qui comparait a l'entier
+             * voyait une commande payee refusée. Le type annonce est donc celui
+             * que la valeur a reellement.
+             */
             'paymentStatus' => $this->when(
                 $order->relationLoaded('payments'),
-                fn (): ?string => $this->latestPayment($order)?->status->value,
+                fn (): ?int => $this->latestPayment($order)?->status->value,
             ),
             'paymentMethod' => $this->when(
                 $order->relationLoaded('payments'),
@@ -173,6 +229,46 @@ final class OrderResource extends ApiResource
             'allowedActions' => $this->when(
                 $isStaff || $order->isOwnedBy($request->user()) || $this->grantedByToken($request, $order),
                 fn (): array => app(OrderService::class)->allowedTransitions($order),
+            ),
+
+            /*
+             * Les transitions qu'un guichetier peut demander depuis le
+             * back-office, et non toutes celles que le service.accepte.
+             *
+             * `allowedActions` repond a « qu'est-ce que le service sait faire »,
+             * et cette reponse est plus large que « qu'est-ce que je peux faire
+             * au guichet » : elle contient les trois etats d'argent, que le
+             * client atteint par le webhook et que le guichet n'atteint d'aucune
+             * facon. Sans cette liste, un menu construit depuis
+             * `allowedActions` proposerait « marquer payee » — et se ferait
+             * refuser avec une 409 dont le message ne ressemble pas a ce qu'il
+             * vient de tenter.
+             *
+             * Elle est donc l'intersection des deux : ce que le service autorise
+             * et ce que le guichet peut demander. Exposee a cote de
+             * `allowedActions` plutot qu'a sa place, parce que le client et le
+             * guichet n'ont pas les memes droits et que melanger les deux
+             * produirait un menu unique qui serait faux pour l'un des deux.
+             */
+            'counterActions' => $this->when(
+                $isStaff,
+                fn (): array => array_values(array_filter(
+                    app(OrderService::class)->allowedTransitions($order),
+                    /*
+                     * La comparaison se fait sur la valeur, parce que
+                     * `allowedTransitions()` rend des enum et
+                     * `counterTransitions()` des entiers : ce sont les deux
+                     * seules formes qui traversent l'API, et les mettre en
+                     * confrontation ici forcerait a convertir l'une des deux.
+                     * Le comparaison stricte reste possible en comparant
+                     * `OrderStatus::from($value)`.
+                     */
+                    static fn (OrderStatus $status): bool => in_array(
+                        $status->value,
+                        OrderService::counterTransitions(),
+                        true,
+                    ),
+                )),
             ),
         ];
     }
@@ -232,6 +328,12 @@ final class OrderResource extends ApiResource
      * declencherait une requete par commande dans une liste, la ou le
      * controleur l'a deja chargee ou a choisi de s'en passer.
      *
+     * L'identifiant departage les dates egales, et c'est ce meme couple
+     * `(created_at, id)` qui definit « la tentative la plus recente » dans le
+     * filtre d'etat du back-office. Sans ce second critere, une commande dont
+     * deux tentatives ont ete ouvertes dans la meme milliseconde pourrait etre
+     * affichee avec l'etat de l'une et filtrer sur celui de l'autre.
+     *
      * Le type de retour est `CarbonInterface` et non `CarbonImmutable` parce que
      * `created_at` est une colonne `timestamp` : Eloquent la rend en
      * `Illuminate\Support\Carbon`, qui n'herite pas de `CarbonImmutable`.
@@ -243,9 +345,12 @@ final class OrderResource extends ApiResource
         /** @var Collection<int, Payment> $payments */
         $payments = $order->payments;
 
-        return $payments->sortByDesc(
-            fn (Payment $payment): CarbonInterface => $payment->created_at ?? CarbonImmutable::now(),
-        )->first();
+        return $payments
+            ->sortBy([
+                fn (Payment $payment): CarbonInterface => $payment->created_at ?? CarbonImmutable::now(),
+                fn (Payment $payment): int => $payment->id ?? 0,
+            ], SORT_REGULAR, descending: true)
+            ->first();
     }
 
     /**

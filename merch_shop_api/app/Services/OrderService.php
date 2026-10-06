@@ -278,6 +278,79 @@ final class OrderService
     }
 
     /**
+     * Toutes les commandes, pour le back-office.
+     *
+     * La troisieme des trois lectures de commandes, avec la meme raison d'etre
+     * pour chacune : la liste d'un client, la file d'un stand, et celle du
+     * guichetier qui doit repondre a « ou est la commande MS-0402 ? » alors
+     * qu'elle a ete passee sans compte.
+     *
+     * Les filtres sont resolus en enum ici, pas dans le controleur : une valeur
+     * de filtre qui ne correspond a aucun etat doit etre refusee, et une liste
+     * d'etats valides est une question de vocabulaire metier. Un controleur qui
+     * laissait passer la chaine transformerait `?status=7` en « aucun filtre »
+     * silencieux, et le guichet verrait la liste entiere en croyant avoir filtre.
+     *
+     * @param  array{status?: string|null, paymentStatus?: string|null, fulfillment?: string|null, q?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Order>
+     */
+    public function listForBackoffice(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        return $this->orders->paginateForBackoffice($perPage, [
+            'status' => $this->resolveFilter(OrderStatus::class, $filters['status'] ?? null, 'status'),
+            'paymentStatus' => $this->resolveFilter(PaymentStatus::class, $filters['paymentStatus'] ?? null, 'paymentStatus'),
+            'fulfillment' => $this->resolveFilter(FulfillmentMethod::class, $filters['fulfillment'] ?? null, 'fulfillment'),
+            'q' => $filters['q'] ?? null,
+        ]);
+    }
+
+    /**
+     * Un filtre d'enumeration, ou rien.
+     *
+     * La valeur demandee est comparée aux valeurs — et non aux noms de cas —
+     * parce que c'est ce qui circule dans l'URL et dans le JSON. Le nom de cas
+     * (`PAID`) et sa valeur (`2`) sont deux fortifications du meme etat, et les
+     * accepter tous les deux laisserait un front qui change de convention se
+     * retrouver devant une liste vide sans explication.
+     *
+     * Une valeur qui ne correspond a rien est une 422 explicite, jamais un
+     * filtre ignore : le guichet qui a tape `?status=paye` doit apprendre que le
+     * vocabulaire est `?status=2`, pas decouvrir une liste entiere en croyant
+     * avoir filtre.
+     *
+     * @template TEnum of \BackedEnum
+     *
+     * @param  class-string<TEnum>  $enum
+     * @return TEnum|null
+     */
+    private function resolveFilter(string $enum, ?string $value, string $field): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $resolved = $enum::tryFrom(is_numeric($value) ? (int) $value : $value);
+
+        if ($resolved === null) {
+            throw new ApiException(
+                'Ce filtre n\'est pas une valeur de '.$field.'.',
+                422,
+                'INVALID_FILTER',
+                [
+                    'field' => $field,
+                    'value' => $value,
+                    'allowed' => array_map(
+                        static fn (\BackedEnum $case): string|int => $case->value,
+                        $enum::cases(),
+                    ),
+                ],
+            );
+        }
+
+        return $resolved;
+    }
+
+    /**
      * Une commande par son identifiant public.
      *
      * Renvoie 404 plutot que 403 sur une commande qui n'est pas la sienne : la
@@ -287,6 +360,37 @@ final class OrderService
     public function findOrFail(int|string $id): Order
     {
         $order = $this->orders->findWithRelations($id, ['items.variant.product', 'user', 'payments', 'invoice']);
+
+        if ($order === null) {
+            throw new ApiException('Commande introuvable.', 404, 'ORDER_NOT_FOUND');
+        }
+
+        return $order;
+    }
+
+    /**
+     * Une commande par son identifiant, pour le back-office.
+     *
+     * Distinct de `findOrFail`, et pas seulement par son nom : les deux ne
+     * chargent pas les memes relations. Celle-ci ajoute `pickupAgent` et le
+     * produit de chaque ligne, parce que la fiche du guichet affiche qui a servi
+     * et quel article chaque ligne porte.
+     *
+     * Elle ne fait pas non plus la meme chose de l'absence : elle leve la meme
+     * erreur 404. Un guichet peut donc chercher une commande qui n'existe pas,
+     * et il ne peut pas la distinguer d'une commande qui appartient a quelqu'un
+     * d'autre — ce qui est correct, car au stand les deux relevent de la meme
+     * reponse « je ne la trouve pas ».
+     */
+    public function findForBackoffice(int|string $id): Order
+    {
+        $order = $this->orders->findWithRelations($id, [
+            'items.variant.product',
+            'user',
+            'payments',
+            'invoice',
+            'pickupAgent',
+        ]);
 
         if ($order === null) {
             throw new ApiException('Commande introuvable.', 404, 'ORDER_NOT_FOUND');
@@ -355,15 +459,104 @@ final class OrderService
     }
 
     /**
+     * Fait avancer une commande depuis le guichet.
+     *
+     * Point d'entree unique du back-office vers les transitions, et c'est sa
+     * raison d'etre qui rend la separation ci-dessous verifiable : c'est le seul
+     * endroit ou un statut demande par un guichetier est traduit en operation,
+     * donc le seul endroit ou la liste des transitions autorisees peut etre
+     * reduite sans que les autres chemins bougent.
+     *
+     * Trois transitions sont accessibles, et trois ne le sont pas. La
+     * distinction n'est pas une commodite de permission : elle porte sur ce que
+     * l'operation implique.
+     *
+     * Ce que le guichet peut faire — `READY_FOR_PICKUP`, `PICKED_UP`,
+     * `CANCELLED` : ce sont des faits constates au stand. L'article est en rayon,
+     * le client est la avec son QR, le stand ne peut plus servir. Aucun de ces
+     * faits ne pretendant qu'un argent a change de main.
+     *
+     * Ce qu'il ne peut pas faire — `PAID`, `REFUND_PENDING`, `REFUNDED` : ce sont
+     * des mouvements d'argent. Les declarer depuis un back-office serait ecrire
+     * « cette commande est reglee » sur la seule foi d'une declaration, et
+     * `markPaid()` est precisement protegee contre cela : elle est reservee au
+     * service de paiement, qui n'agit que sur un reglement confirme par
+     * l'operateur. Un remboursement suit la meme voie, et passe par
+     * `RefundService` qui parle a l'operateur.
+     *
+     * Le refus est explicite plutot qu'un 403, avec la raison, parce que le
+     * guichet qui tente l'action doit comprendre qu'elle n'est pas interdite par
+     * accident : l'argent se declare chez FedaPay, pas dans un menu deroulant.
+     *
+     * Le service reste le seul juge des transitions : cet aiguillage ne dispense
+     * d'aucune des verifications qu'il ferait de lui-meme.
+     */
+    public function advanceTo(Order $order, OrderStatus $target, ?User $agent = null): Order
+    {
+        return match ($target) {
+            OrderStatus::READY_FOR_PICKUP => $this->markReadyForPickup($order),
+            OrderStatus::PICKED_UP => $this->markPickedUp($order, $agent),
+            OrderStatus::CANCELLED => $this->cancel($order),
+
+            /*
+             * Les trois mouvements d'argent, refuses ici.
+             *
+             * Le message dit ou l'argent se declare, pas seulement que l'action
+             * est refusee : un guichetier qui a bien recu des espèces ne doit
+             * pas repartir en cherchant par quel bouton enregistrer ce qu'il a
+             * dans sa caisse.
+             */
+            OrderStatus::PAID,
+            OrderStatus::REFUND_PENDING,
+            OrderStatus::REFUNDED => throw new ApiException(
+                'Un encaissement ou un remboursement se déclare chez FedaPay, pas depuis le back-office.',
+                409,
+                'NOT_A_COUNTER_TRANSITION',
+                [
+                    'requested' => $target->value,
+                    'allowed' => array_column(
+                        [OrderStatus::READY_FOR_PICKUP, OrderStatus::PICKED_UP, OrderStatus::CANCELLED],
+                        'value',
+                    ),
+                ],
+            ),
+
+            default => $this->transition($order, $target),
+        };
+    }
+
+    /**
+     * Les transitions qu'un guichetier peut demander.
+     *
+     * Expose pour que le back-office n'affiche que ces boutons, sans les
+     * deduire de `allowedTransitions()` — qui repond a une autre question,
+     * « qu'est-ce que le service accepte », et qui inclut donc les transitions
+     * d'argent que le guichet ne doit pas proposer.
+     *
+     * La liste est une constante plutot qu'un calcul sur la table des
+     * transitions : elle decrit une decision du guichet, pas une propriete du
+     * service, et elle se lit d'un coup d'oeil.
+     *
+     * @return array<int, int>
+     */
+    public static function counterTransitions(): array
+    {
+        return array_column(
+            [OrderStatus::READY_FOR_PICKUP, OrderStatus::PICKED_UP, OrderStatus::CANCELLED],
+            'value',
+        );
+    }
+
+    /**
      * Enregistre le retrait effectif d'une commande au stand.
      *
      * Le retrait est un evenement externe, constate par le scan du QR : le
      * service ne verifie donc pas le jeton, ce que fait l'appelant qui possede
      * le secret de comparaison.
      */
-    public function markPickedUp(Order $order): Order
+    public function markPickedUp(Order $order, ?User $agent = null): Order
     {
-        return DB::transaction(function () use ($order): Order {
+        return DB::transaction(function () use ($order, $agent): Order {
             $this->assertPickupOrder($order);
             $this->assertCanTransition($order, OrderStatus::PICKED_UP);
 
@@ -371,6 +564,24 @@ final class OrderService
                 'status' => OrderStatus::PICKED_UP,
                 'pickup_status' => PickupStatus::PICKED_UP,
                 'pickup_time' => now(),
+
+                /*
+                 * Qui a servi.
+                 *
+                 * L'agent est optionnel parce que cette methode est aussi
+                 * appelee par des chemins qui n'ont pas de session de guichetier
+                 * — une resolution de commande interne, une reprise apres incident
+                 * — et qu'un appel sans auteur ne doit pas devenir un echec.
+                 * L'absence reste distinguishable : la commande est servie, mais
+                 * on ne sait pas par qui, ce qui vaut mieux qu'un nom invente.
+                 *
+                 * Il n'est pas non plus renseigne quand il est deja present : une
+                 * commande ne peut servir qu'une fois, donc l'appel qui aboutit
+                 * est le seul a l'ecrire, et le relire ne ferait qu'ecraser une
+                 * donnee deja etablie par un appel anterieur rejoue.
+                 */
+                'picked_up_by_user_id' => $agent?->id,
+
                 /*
                  * Le jeton est efface apres usage. Un QR Code est une photo :
                  * sans cette mesure, un client photographie avant le festival
@@ -786,7 +997,13 @@ final class OrderService
      */
     private function reload(Order $order): Order
     {
-        return $this->orders->findWithRelations($order->uuid, ['items.variant', 'user', 'payments', 'invoice']);
+        return $this->orders->findWithRelations($order->uuid, [
+            'items.variant',
+            'user',
+            'payments',
+            'invoice',
+            'pickupAgent',
+        ]);
     }
 
     /**

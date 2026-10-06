@@ -22,24 +22,42 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * operateur a partir d'un prefixe — un prefixe qui ne dit pas l'operateur, et
  * qui change.
  *
- * Seule la Cote d'Ivoire est acceptee : le festival n'installe de stands
- * que sur son territoire, et un code pays etranger passe par ici finirait dans
- * une colonne a deux lettres qui ne serait pas la sienne.
+ * Seul le Togo est accepte : le festival n'installe de stands que sur son
+ * territoire, et un code pays etranger passe par ici finirait dans une colonne
+ * a deux lettres qui ne serait pas la sienne.
+ *
+ * Le meme pays est declare ailleurs dans l'API — `RegisterRequest` valide le
+ * compte sur `^\\+?228[0-9]{8}$` et le schema OpenAPI annonce la meme forme. Ces
+ * trois lectures etaient tombees sur la Cote d'Ivoire, seule a regner ici : un
+ * acheteur togolais pouvait creer son compte puis se faire refuser sa commande,
+ * sur un numero que l'API venait d'accepter.
  */
 final class PhoneNumber implements ValidationRule
 {
+    /** Indicatif du Togo, tel qu'il se colle au numero national. */
+    private const COUNTRY = '228';
+
+    /** Code pays attendu par l'operateur, dans la colonne voisine. */
+    private const COUNTRY_CODE = 'tg';
+
     /**
-     * Indicatif du pays, et longueur des numeros nationaux.
+     * Longueur d'un numero togolais : huit chiffres, fixe comme mobile.
      *
-     * Les numeros ivoiriens mobiles font huit chiffres et commencent par 01 ou 05
-     * ; fixes et numeros des autres operateurs en font dix. Les deux formes sont
-     * acceptees : un festivalier sans compte peut avoir une ligne fixe.
+     * Une seule longueur, donc, et non les deux que le pays voisin autorisait.
+     * Accepter dix chiffres laisserait passer un numero qui n'a pas d'abonne :
+     * la commande serait « payee » vers une destination qui n'existe pas, et le
+     * remboursement echouerait toujours.
      */
-    private const COUNTRY = '225';
+    private const NATIONAL_LENGTH = 8;
 
-    private const COUNTRY_CODE = 'ci';
-
-    private const NATIONAL_LENGTHS = [8, 10];
+    /**
+     * Prefixe d'appel international, ecrit `00228...`.
+     *
+     * Ecriture valide et frequente, et une des trois avec lesquelles un meme
+     * numero se designe. Elle est retiree avant l'indicatif, car elle se trouve
+     * devant lui.
+     */
+    private const INTERNATIONAL_PREFIX = '00';
 
     /**
      * Verifie la normalisation sans l'appliquer.
@@ -47,7 +65,7 @@ final class PhoneNumber implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if ($this->normalise($value) === null) {
-            $fail('Le numéro de téléphone n’est pas un numéro mobile money ivoirien valide.');
+            $fail('Le numéro de téléphone n’est pas un numéro togolais valide.');
         }
     }
 
@@ -73,18 +91,30 @@ final class PhoneNumber implements ValidationRule
         $digits = preg_replace('/\D+/', '', $value) ?? '';
 
         /*
-         * L'indicatif est retire une seule fois. Sans cette borne, un numero
-         * national valide comme `0707070707` commencerait par `225` par
-         * coincidence et perdrait ses trois premiers chiffres — un retrait vers
-         * un numero faux, a partir d'une saisie valide.
+         * `00` devant l'indicatif n'est pas le debut du numero : c'est la
+         * maniere d'ecrire un appel depuis l'international, et il se retire
+         * avant toute autre lecture. La borne sur la longueur qui suit eviterait
+         * de le confondre avec un numero national — huit chiffres ne peuvent pas
+         * commencer par `00` — mais le retirer ici evite de dependre de cette
+         * coincidence.
          */
-        if (str_starts_with($digits, self::COUNTRY) && strlen($digits) > 10) {
-            $digits = substr($digits, 3);
+        if (str_starts_with($digits, self::INTERNATIONAL_PREFIX)) {
+            $digits = substr($digits, strlen(self::INTERNATIONAL_PREFIX));
         }
 
-        $length = strlen($digits);
+        /*
+         * L'indicatif est retire une seule fois, et seulement d'un numero plus
+         * long que le national. Sans cette borne, un numero national valide
+         * commencerait par `228` — `22890123` est un Togois valide — et perdrait
+         * ses trois premiers chiffres : un retrait vers un numero faux, a partir
+         * d'une saisie valide. C'est le meme piege que celui que la regle
+         * bicountryenne du pays voisin rendait permanent.
+         */
+        if (strlen($digits) > self::NATIONAL_LENGTH && str_starts_with($digits, self::COUNTRY)) {
+            $digits = substr($digits, strlen(self::COUNTRY));
+        }
 
-        if (! in_array($length, self::NATIONAL_LENGTHS, true)) {
+        if (strlen($digits) !== self::NATIONAL_LENGTH) {
             return null;
         }
 
