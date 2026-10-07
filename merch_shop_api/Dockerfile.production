@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+
+# ---------------------------------------------------------------------------
+# Image de PRODUCTION de l'API (shop-api.ourtdev.com).
+#
+# Differences avec le Dockerfile de developpement :
+#   - FrankenPHP (serveur HTTP multi-workers) au lieu de `php artisan serve`,
+#     qui ne traite qu'une requete a la fois ;
+#   - dependances Composer sans les paquets de dev (Swagger, Faker, ...) ;
+#   - aucun seed automatique : TestDataSeeder cree des comptes de demo.
+#
+# La configuration (APP_KEY, base, Redis, FedaPay, Cloudinary...) est fournie
+# a l'execution par variables d'environnement, jamais dans l'image.
+# ---------------------------------------------------------------------------
+
+FROM node:22-bookworm-slim AS assets
+WORKDIR /build
+COPY package.json ./
+RUN npm install --no-audit --no-fund
+COPY vite.config.js ./
+COPY resources/ ./resources/
+RUN npm run build
+
+
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+        --no-dev \
+        --no-interaction \
+        --no-progress \
+        --no-scripts \
+        --no-autoloader \
+        --prefer-dist \
+        --ignore-platform-reqs
+COPY . .
+# Swagger est une dependance de dev : sa config reference des classes absentes ici.
+RUN rm -f config/l5-swagger.php
+RUN composer dump-autoload --optimize --classmap-authoritative --no-dev --no-interaction
+
+
+FROM dunglas/frankenphp:1-php8.4-bookworm
+
+RUN install-php-extensions bcmath gd intl opcache pcntl pdo_pgsql redis zip \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY docker/production/php.ini /usr/local/etc/php/conf.d/zz-production.ini
+
+WORKDIR /app
+COPY --from=vendor /app /app
+COPY --from=assets /build/public/build /app/public/build
+COPY docker/production/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+# package:discover sans les paquets de dev (le cache genere en dev les reference).
+RUN rm -f bootstrap/cache/*.php \
+    && APP_KEY=base64:$(head -c 32 /dev/urandom | base64) php artisan package:discover --ansi \
+    && mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache /data/caddy /config/caddy \
+    && chmod +x /usr/local/bin/entrypoint.sh
+
+# Pas de HTTPS ici : le proxy Caddy du serveur termine le TLS.
+ENV SERVER_NAME=":8080" \
+    APP_ENV=production \
+    APP_DEBUG=false \
+    LOG_CHANNEL=stderr
+
+USER www-data
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile"]

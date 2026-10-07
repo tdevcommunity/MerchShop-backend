@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // En production, l'API n'est joignable qu'a travers le proxy HTTPS du
+        // serveur (Caddy) : on lui fait confiance pour X-Forwarded-Proto/For,
+        // sinon Laravel croit etre en HTTP (URL generees, cookies secure).
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectGuestsTo(
             fn (Request $request): ?string => $request->is('api/*') ? null : route('login'),
         );
