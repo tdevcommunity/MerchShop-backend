@@ -51,9 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           token=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://deploy.ourtdev.com" | jq -r .value)
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://admin-deploy.ourtdev.com" | jq -r .value)
           echo "::add-mask::$token"
           status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 \
-            -X POST -H "Authorization: Bearer $token" https://deploy.ourtdev.com/deploy)
+            -X POST -H "Authorization: Bearer $token" https://admin-deploy.ourtdev.com/deploy)
           cat response.json; echo
           test "$status" = "200"
