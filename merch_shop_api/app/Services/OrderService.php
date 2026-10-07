@@ -1,0 +1,1024 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\CatalogStatus;
+use App\Enums\FulfillmentMethod;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
+use App\Enums\PickupStatus;
+use App\Exceptions\ApiException;
+use App\Models\Order;
+use App\Models\User;
+use App\Models\Variant;
+use App\Repositories\Contracts\OrderRepositoryInterface;
+use App\Repositories\Contracts\PaymentRepositoryInterface;
+use App\Repositories\Contracts\VariantRepositoryInterface;
+use App\Rules\PhoneNumber;
+use App\Support\Api\Money;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+/**
+ * Regle metier des commandes.
+ *
+ * Porte les decisions qu'aucune autre couche ne peut prendre a sa place : le
+ * moment ou le stock est reserve, la maniere dont les montants sont calcules, et
+ * les transitions d'etat autorisees.
+ *
+ * Deux invariants gobernent tout le reste :
+ *
+ *  1. le client n'est jamais une source de verite sur les prix. Le payload ne
+ *     porte qu'un identifiant de variante et une quantite ; le prix, le total et
+ *     les frais sont recalcules ici a partir du catalogue au moment de la vente.
+ *     Un montant recu du client ne serait pas seulement inexact, il serait
+ *     falsifiable, ce que le plan de tracking interdit explicitement ;
+ *
+ *  2. le stock est reserve des la creation de la commande, dans la meme
+ *     transaction que son enregistrement. Le decrementer a la confirmation du
+ *     paiement laisserait la place a deux commandes payables pour un seul
+ *     article : le stock reel ne serait alors verifie par personne, et la
+ *     survente ne se decouvrirait qu'a la preparation des commandes.
+ */
+final class OrderService
+{
+    /**
+     * Nombre de tentatives d'attribution d'un numero de commande.
+     *
+     * Le numero est unique en base, mais deux commandes creees dans la meme
+     * milliseconde peuvent puiser la meme sequence. L'index unique tranche, et
+     * l'echec est donc attendu plutot que subi : quelques tentatives suffisent
+     * car la probabilite de collision sur huit caracteres aleatoires est
+     * negligeable.
+     */
+    private const NUMBER_ATTEMPTS = 5;
+
+    /**
+     * Transitions d'etat autorisees.
+     *
+     * La table vit dans le service, et non dans l'enumeration, parce que la
+     * regle est metier et non etat : elle dit ce que le guichet et le tunnel
+     * ont le droit de faire, ce qui n'appartient pas a la description d'une
+     * valeur.
+     *
+     * Deux choix meritent d'etre explicites :
+     *
+     *  - une commande payee ne peut pas etre annulee, seulement remboursee. Une
+     *    annulation apres encaissement ferait disparaitre de la commande le
+     *    fait que de l'argent a ete pris, ce qui rendrait le rapprochement
+     *    comptable impossible. Les deux etats restent distincts jusqu'au bout :
+     *    l'annulation est un echec de vente, le remboursement un mouvement de
+     *    tresorerie ;
+     *
+     *  - le retrait n'est offert qu'a une commande payee et non livree, donc
+     *    `PICKED_UP` n'est atteignable que depuis `READY_FOR_PICKUP`. On ne
+     *    sert pas un article dont le paiement n'est pas confirme.
+     *
+     * @var array<int, array<int, OrderStatus>>
+     */
+    private const TRANSITIONS = [
+        OrderStatus::PENDING_PAYMENT->value => [
+            OrderStatus::PAID->value,
+            OrderStatus::CANCELLED->value,
+        ],
+        OrderStatus::PAID->value => [
+            OrderStatus::READY_FOR_PICKUP->value,
+            OrderStatus::REFUND_PENDING->value,
+            OrderStatus::REFUNDED->value,
+        ],
+        OrderStatus::READY_FOR_PICKUP->value => [
+            OrderStatus::PICKED_UP->value,
+            OrderStatus::REFUND_PENDING->value,
+            OrderStatus::REFUNDED->value,
+        ],
+        OrderStatus::PICKED_UP->value => [
+            OrderStatus::REFUND_PENDING->value,
+            OrderStatus::REFUNDED->value,
+        ],
+
+        /*
+         * L'attente est une passerelle, pas un cul-de-sac : elle se referme soit
+         * sur un remboursement confirme, soit sur l'etat que la commande avait
+         * avant la demande lorsque l'operateur refuse le depot. Ces trois issues
+         * ne sont pas interchangeables — remettre une commande deja retiree a
+         * `paid` lui retirerait son droit de retrait alors qu'elle a ete servie,
+         * et le stand la servirait une seconde fois.
+         */
+        OrderStatus::REFUND_PENDING->value => [
+            OrderStatus::PAID->value,
+            OrderStatus::READY_FOR_PICKUP->value,
+            OrderStatus::PICKED_UP->value,
+            OrderStatus::REFUNDED->value,
+        ],
+        OrderStatus::CANCELLED->value => [],
+        OrderStatus::REFUNDED->value => [],
+    ];
+
+    public function __construct(
+        private readonly OrderRepositoryInterface $orders,
+        private readonly VariantRepositoryInterface $variants,
+        private readonly PaymentRepositoryInterface $payments,
+        private readonly Money $money,
+    ) {}
+
+    /**
+     * Enregistre une commande, reserve le stock et ouvre la tentative de paiement.
+     *
+     * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null, customer_name: string, customer_phone_number: string}  $data
+     */
+    public function create(array $data): Order
+    {
+        /*
+         * Les enums sont resolus ici et non dans le controleur : la validation
+         * HTTP garantit deja que la valeur est connue, mais le service est
+         * aussi appele par les tests, les commandes artisan et le routage des
+         * evenements, qui passent des chaines. Accepter les deux formes evite
+         * que chacun de ces appelants fasse sa propre conversion, et qu'une
+         * conversion oubliee echoue en 500 sur une donnee pourtant valide.
+         */
+        $data['fulfillment_method'] = $data['fulfillment_method'] instanceof FulfillmentMethod
+            ? $data['fulfillment_method']
+            : FulfillmentMethod::from((string) $data['fulfillment_method']);
+
+        $data['payment_method'] = $data['payment_method'] instanceof PaymentMethod
+            ? $data['payment_method']
+            : PaymentMethod::from((string) $data['payment_method']);
+
+        return DB::transaction(function () use ($data): Order {
+            /*
+             * Le verrou est pose avant tout calcul de montant, et les lignes
+             * sont resolues par identifiant interne triee : c'est cet ordre-la
+             * qui garantit que deux commandes simultanees sur le meme panier
+             * n'attendent pas l'une l'autre indefiniment.
+             */
+            $variants = $this->lockRequestedVariants($data['items']);
+
+            $lines = $this->priceLines($variants, $data['items']);
+
+            $subTotal = $this->money->sum(array_column($lines, 'total'));
+
+            /*
+             * Aucune remise n'est calculee ici : le mecanisme de codes promo
+             * n'existe pas encore. La colonne reste a zero plutot que d'annoncer
+             * une regle qui n'est pas ecrite : un montant applique sans
+             * justification serait recopie dans la facture, donc dans la
+             * comptabilite.
+             */
+            $discount = 0;
+
+            /*
+             * Frais de livraison.
+             *
+             * Lus dans la configuration et jamais dans le payload : un montant
+             * envoye par le client permettrait d'ecrire le chiffre a encaisser. Le
+             * retrait au stand n'en a pas, ce qui est le cas par defaut, donc le
+             * montant est nul sauf livraison.
+             */
+            $deliveryFee = $data['fulfillment_method'] === FulfillmentMethod::DELIVERY
+                ? (int) config('orders.delivery_fee')
+                : 0;
+
+            $order = $this->createWithUniqueNumber([
+                'user_id' => ($data['user'] ?? null)?->id,
+
+                /*
+                 * Identite de l'acheteur, normalisee a la validation.
+                 *
+                 * Le numero est ecrit deja normalise plutot que tel qu'il a ete
+                 * saisi : c'est cette forme qui partira a l'operateur, et une
+                 * commande enregistree avec un numero illisible le resterait
+                 * toujours — un remboursement deux mois plus tard n'aurait alors plus
+                 * de donnee exploitable.
+                 */
+                'customer_name' => $data['customer_name'],
+                'customer_phone_number' => PhoneNumber::normalise($data['customer_phone_number']),
+                'customer_phone_country' => PhoneNumber::countryCode(),
+                'sub_total' => $subTotal,
+                'shipping_address' => $data['shipping_address'] ?? null,
+                'discount' => $discount,
+                'delivery_fee' => $deliveryFee,
+
+                /*
+                 * La devise est ecrite sur la commande plutot que deduite a la
+                 * lecture. Le festival n'encaisse qu'en francs CFA, mais un
+                 * montant sans devise n'est pas interpretable, et un jour ou une
+                 * seconde devise est acceptee, corriger celle-ci sur les lignes
+                 * existantes ferait dire « XOF » a des montants qui ne l'etaient
+                 * pas.
+                 */
+                'currency' => Money::CURRENCY,
+
+                /*
+                 * L'identite du total : sous-total, moins la remise, plus les
+                 * frais de livraison. Elle est ecrite ici, dans le seul endroit ou
+                 * le total est calcule, plutot que recomposee a chaque lecture,
+                 * pour qu'un montant affiche, facture et encaisse ne puissent pas
+                 * diverger.
+                 */
+                'total' => $subTotal - $discount + $deliveryFee,
+
+                'status' => OrderStatus::PENDING_PAYMENT,
+                'fulfillment_method' => $data['fulfillment_method'],
+                // Le droit au retrait n'existe que pour une commande de stand.
+                // Une commande livree n'a pas de retrait a exercer, et sa ligne
+                // reste nulle plutot que PENDING : la colonne distingue le droit
+                // de l'usage, un droit qui n'existe pas ne doit pas avoir d'etat.
+                'pickup_status' => $data['fulfillment_method']->requiresPickupQrCode()
+                    ? PickupStatus::PENDING
+                    : null,
+                'participant_id' => $data['participant_id'] ?? null,
+            ]);
+
+            foreach ($lines as $line) {
+                $this->variants->restock($line['variant'], -$line['quantity']);
+            }
+
+            $this->createItems($order, $lines);
+
+            /*
+             * La tentative de paiement est ouverte des la creation, et non a
+             * l'appel chez l'operateur : c'est elle qui porte l'identifiant
+             * envoye a l'agregateur, et cet identifiant doit exister avant que
+             * l'operateur puisse rappeler. Un webhook arrivant avant la fin de
+             * cette transaction la trouvera donc deja en base.
+             */
+            $this->payments->create([
+                'order_id' => $order->id,
+                'amount' => $order->total,
+                'method' => $data['payment_method'],
+                'status' => PaymentStatus::PENDING,
+            ]);
+
+            return $this->reload($order);
+        });
+    }
+
+    /**
+     * Commandes d'un client.
+     *
+     * @return LengthAwarePaginator<int, Order>
+     */
+    public function listForUser(User $user, int $perPage, ?OrderStatus $status = null): LengthAwarePaginator
+    {
+        return $this->orders->paginateForUser($user, $perPage, $status);
+    }
+
+    /**
+     * File des commandes a servir au stand.
+     *
+     * @return LengthAwarePaginator<int, Order>
+     */
+    public function listForPickup(int $perPage): LengthAwarePaginator
+    {
+        return $this->orders->paginateForPickup($perPage);
+    }
+
+    /**
+     * Toutes les commandes, pour le back-office.
+     *
+     * La troisieme des trois lectures de commandes, avec la meme raison d'etre
+     * pour chacune : la liste d'un client, la file d'un stand, et celle du
+     * guichetier qui doit repondre a « ou est la commande MS-0402 ? » alors
+     * qu'elle a ete passee sans compte.
+     *
+     * Les filtres sont resolus en enum ici, pas dans le controleur : une valeur
+     * de filtre qui ne correspond a aucun etat doit etre refusee, et une liste
+     * d'etats valides est une question de vocabulaire metier. Un controleur qui
+     * laissait passer la chaine transformerait `?status=7` en « aucun filtre »
+     * silencieux, et le guichet verrait la liste entiere en croyant avoir filtre.
+     *
+     * @param  array{status?: string|null, paymentStatus?: string|null, fulfillment?: string|null, q?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Order>
+     */
+    public function listForBackoffice(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        return $this->orders->paginateForBackoffice($perPage, [
+            'status' => $this->resolveFilter(OrderStatus::class, $filters['status'] ?? null, 'status'),
+            'paymentStatus' => $this->resolveFilter(PaymentStatus::class, $filters['paymentStatus'] ?? null, 'paymentStatus'),
+            'fulfillment' => $this->resolveFilter(FulfillmentMethod::class, $filters['fulfillment'] ?? null, 'fulfillment'),
+            'q' => $filters['q'] ?? null,
+        ]);
+    }
+
+    /**
+     * Un filtre d'enumeration, ou rien.
+     *
+     * La valeur demandee est comparée aux valeurs — et non aux noms de cas —
+     * parce que c'est ce qui circule dans l'URL et dans le JSON. Le nom de cas
+     * (`PAID`) et sa valeur (`2`) sont deux fortifications du meme etat, et les
+     * accepter tous les deux laisserait un front qui change de convention se
+     * retrouver devant une liste vide sans explication.
+     *
+     * Une valeur qui ne correspond a rien est une 422 explicite, jamais un
+     * filtre ignore : le guichet qui a tape `?status=paye` doit apprendre que le
+     * vocabulaire est `?status=2`, pas decouvrir une liste entiere en croyant
+     * avoir filtre.
+     *
+     * @template TEnum of \BackedEnum
+     *
+     * @param  class-string<TEnum>  $enum
+     * @return TEnum|null
+     */
+    private function resolveFilter(string $enum, ?string $value, string $field): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $resolved = $enum::tryFrom(is_numeric($value) ? (int) $value : $value);
+
+        if ($resolved === null) {
+            throw new ApiException(
+                'Ce filtre n\'est pas une valeur de '.$field.'.',
+                422,
+                'INVALID_FILTER',
+                [
+                    'field' => $field,
+                    'value' => $value,
+                    'allowed' => array_map(
+                        static fn (\BackedEnum $case): string|int => $case->value,
+                        $enum::cases(),
+                    ),
+                ],
+            );
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Une commande par son identifiant public.
+     *
+     * Renvoie 404 plutot que 403 sur une commande qui n'est pas la sienne : la
+     * reponse ne doit pas reveler l'existence d'une commande qui appartient a
+     * quelqu'un d'autre. C'est le meme arbitrage que pour le catalogue.
+     */
+    public function findOrFail(int|string $id): Order
+    {
+        $order = $this->orders->findWithRelations($id, ['items.variant.product', 'user', 'payments', 'invoice']);
+
+        if ($order === null) {
+            throw new ApiException('Commande introuvable.', 404, 'ORDER_NOT_FOUND');
+        }
+
+        return $order;
+    }
+
+    /**
+     * Une commande par son identifiant, pour le back-office.
+     *
+     * Distinct de `findOrFail`, et pas seulement par son nom : les deux ne
+     * chargent pas les memes relations. Celle-ci ajoute `pickupAgent` et le
+     * produit de chaque ligne, parce que la fiche du guichet affiche qui a servi
+     * et quel article chaque ligne porte.
+     *
+     * Elle ne fait pas non plus la meme chose de l'absence : elle leve la meme
+     * erreur 404. Un guichet peut donc chercher une commande qui n'existe pas,
+     * et il ne peut pas la distinguer d'une commande qui appartient a quelqu'un
+     * d'autre — ce qui est correct, car au stand les deux relevent de la meme
+     * reponse « je ne la trouve pas ».
+     */
+    public function findForBackoffice(int|string $id): Order
+    {
+        $order = $this->orders->findWithRelations($id, [
+            'items.variant.product',
+            'user',
+            'payments',
+            'invoice',
+            'pickupAgent',
+        ]);
+
+        if ($order === null) {
+            throw new ApiException('Commande introuvable.', 404, 'ORDER_NOT_FOUND');
+        }
+
+        return $order;
+    }
+
+    /**
+     * Annule une commande avant paiement et rend le stock.
+     *
+     * Le stock n'est rendu que si la commande ne l'etait pas deja : une double
+     * annulation ne peut pas credited deux fois la variante.
+     */
+    public function cancel(Order $order): Order
+    {
+        return DB::transaction(function () use ($order): Order {
+            $this->assertCanTransition($order, OrderStatus::CANCELLED);
+
+            $this->releaseStock($order);
+            $this->payments->forOrder($order)->each(function ($payment): void {
+                // Une tentative encore en attente est sans issue des lors que la
+                // commande est fermee : la laisser en attente ferait croire a un
+                // reglement possible. La date d'echec est ecrite comme lors d'un
+                // refus de l'operateur, pour que l'annulation ne se compte pas
+                // comme un paiement que le client aurait abandonne.
+                if ($payment->status === PaymentStatus::PENDING) {
+                    $payment->update([
+                        'status' => PaymentStatus::FAILED,
+                        'failed_at' => now(),
+                    ]);
+                }
+            });
+
+            $order->update([
+                'status' => OrderStatus::CANCELLED,
+                'pickup_status' => $order->pickup_status === PickupStatus::PENDING
+                    ? PickupStatus::CANCELLED
+                    : $order->pickup_status,
+            ]);
+
+            return $this->reload($order);
+        });
+    }
+
+    /**
+     * Enregistre le reglement integral d'une commande.
+     *
+     * Reservee au service de paiement, qui est le seul a savoir qu'un reglement
+     * a ete confirme : un back-office ne declare pas un encaissement sur la seule
+     * foi d'une declaration du client.
+     */
+    public function markPaid(Order $order): Order
+    {
+        return $this->transition($order, OrderStatus::PAID);
+    }
+
+    /**
+     * Passe une commande payee en attente de service au stand.
+     */
+    public function markReadyForPickup(Order $order): Order
+    {
+        $this->assertPickupOrder($order);
+
+        return $this->transition($order, OrderStatus::READY_FOR_PICKUP);
+    }
+
+    /**
+     * Fait avancer une commande depuis le guichet.
+     *
+     * Point d'entree unique du back-office vers les transitions, et c'est sa
+     * raison d'etre qui rend la separation ci-dessous verifiable : c'est le seul
+     * endroit ou un statut demande par un guichetier est traduit en operation,
+     * donc le seul endroit ou la liste des transitions autorisees peut etre
+     * reduite sans que les autres chemins bougent.
+     *
+     * Trois transitions sont accessibles, et trois ne le sont pas. La
+     * distinction n'est pas une commodite de permission : elle porte sur ce que
+     * l'operation implique.
+     *
+     * Ce que le guichet peut faire — `READY_FOR_PICKUP`, `PICKED_UP`,
+     * `CANCELLED` : ce sont des faits constates au stand. L'article est en rayon,
+     * le client est la avec son QR, le stand ne peut plus servir. Aucun de ces
+     * faits ne pretendant qu'un argent a change de main.
+     *
+     * Ce qu'il ne peut pas faire — `PAID`, `REFUND_PENDING`, `REFUNDED` : ce sont
+     * des mouvements d'argent. Les declarer depuis un back-office serait ecrire
+     * « cette commande est reglee » sur la seule foi d'une declaration, et
+     * `markPaid()` est precisement protegee contre cela : elle est reservee au
+     * service de paiement, qui n'agit que sur un reglement confirme par
+     * l'operateur. Un remboursement suit la meme voie, et passe par
+     * `RefundService` qui parle a l'operateur.
+     *
+     * Le refus est explicite plutot qu'un 403, avec la raison, parce que le
+     * guichet qui tente l'action doit comprendre qu'elle n'est pas interdite par
+     * accident : l'argent se declare chez FedaPay, pas dans un menu deroulant.
+     *
+     * Le service reste le seul juge des transitions : cet aiguillage ne dispense
+     * d'aucune des verifications qu'il ferait de lui-meme.
+     */
+    public function advanceTo(Order $order, OrderStatus $target, ?User $agent = null): Order
+    {
+        return match ($target) {
+            OrderStatus::READY_FOR_PICKUP => $this->markReadyForPickup($order),
+            OrderStatus::PICKED_UP => $this->markPickedUp($order, $agent),
+            OrderStatus::CANCELLED => $this->cancel($order),
+
+            /*
+             * Les trois mouvements d'argent, refuses ici.
+             *
+             * Le message dit ou l'argent se declare, pas seulement que l'action
+             * est refusee : un guichetier qui a bien recu des espèces ne doit
+             * pas repartir en cherchant par quel bouton enregistrer ce qu'il a
+             * dans sa caisse.
+             */
+            OrderStatus::PAID,
+            OrderStatus::REFUND_PENDING,
+            OrderStatus::REFUNDED => throw new ApiException(
+                'Un encaissement ou un remboursement se déclare chez FedaPay, pas depuis le back-office.',
+                409,
+                'NOT_A_COUNTER_TRANSITION',
+                [
+                    'requested' => $target->value,
+                    'allowed' => array_column(
+                        [OrderStatus::READY_FOR_PICKUP, OrderStatus::PICKED_UP, OrderStatus::CANCELLED],
+                        'value',
+                    ),
+                ],
+            ),
+
+            default => $this->transition($order, $target),
+        };
+    }
+
+    /**
+     * Les transitions qu'un guichetier peut demander.
+     *
+     * Expose pour que le back-office n'affiche que ces boutons, sans les
+     * deduire de `allowedTransitions()` — qui repond a une autre question,
+     * « qu'est-ce que le service accepte », et qui inclut donc les transitions
+     * d'argent que le guichet ne doit pas proposer.
+     *
+     * La liste est une constante plutot qu'un calcul sur la table des
+     * transitions : elle decrit une decision du guichet, pas une propriete du
+     * service, et elle se lit d'un coup d'oeil.
+     *
+     * @return array<int, int>
+     */
+    public static function counterTransitions(): array
+    {
+        return array_column(
+            [OrderStatus::READY_FOR_PICKUP, OrderStatus::PICKED_UP, OrderStatus::CANCELLED],
+            'value',
+        );
+    }
+
+    /**
+     * Enregistre le retrait effectif d'une commande au stand.
+     *
+     * Le retrait est un evenement externe, constate par le scan du QR : le
+     * service ne verifie donc pas le jeton, ce que fait l'appelant qui possede
+     * le secret de comparaison.
+     */
+    public function markPickedUp(Order $order, ?User $agent = null): Order
+    {
+        return DB::transaction(function () use ($order, $agent): Order {
+            $this->assertPickupOrder($order);
+            $this->assertCanTransition($order, OrderStatus::PICKED_UP);
+
+            $order->update([
+                'status' => OrderStatus::PICKED_UP,
+                'pickup_status' => PickupStatus::PICKED_UP,
+                'pickup_time' => now(),
+
+                /*
+                 * Qui a servi.
+                 *
+                 * L'agent est optionnel parce que cette methode est aussi
+                 * appelee par des chemins qui n'ont pas de session de guichetier
+                 * — une resolution de commande interne, une reprise apres incident
+                 * — et qu'un appel sans auteur ne doit pas devenir un echec.
+                 * L'absence reste distinguishable : la commande est servie, mais
+                 * on ne sait pas par qui, ce qui vaut mieux qu'un nom invente.
+                 *
+                 * Il n'est pas non plus renseigne quand il est deja present : une
+                 * commande ne peut servir qu'une fois, donc l'appel qui aboutit
+                 * est le seul a l'ecrire, et le relire ne ferait qu'ecraser une
+                 * donnee deja etablie par un appel anterieur rejoue.
+                 */
+                'picked_up_by_user_id' => $agent?->id,
+
+                /*
+                 * Le jeton est efface apres usage. Un QR Code est une photo :
+                 * sans cette mesure, un client photographie avant le festival
+                 * pourrait presenter la meme image toute la journee, et le
+                 * comptage des goodies distribuees serait faux.
+                 */
+                'pickup_token_hash' => null,
+            ]);
+
+            return $this->reload($order);
+        });
+    }
+
+    /**
+     * Rembourse une commande payee et rend le stock.
+     *
+     * Le stock revient en jeu : les articles n'ont pas ete distribues s'ils
+     * n'ont pas ete retires, et les immobiliser ne servirait a rien.
+     */
+    /**
+     * La commande a-t-elle deja ete recouvree ?
+     *
+     * Cette methode ne demande plus l'argent : elle constate que la restitution
+     * a ete confirmee par l'operateur. La demande elle-meme appartient a
+     * `RefundService`, qui parle a l'operateur, et l'ordre des deux est
+     * imperative — le stock et le statut ne bougent qu'une fois l'argent sorti.
+     *
+     * Le retour a la commande vient apres la transaction, comme partout ailleurs
+     * dans ce service : la relecture y reapplique les relations, et l'ecriture
+     * doit etre etablie avant.
+     */
+    public function markRefunded(Order $order): Order
+    {
+        $committed = DB::transaction(function () use ($order): Order {
+            $this->assertCanTransition($order, OrderStatus::REFUNDED);
+
+            /*
+             * Un article deja remis au participant n'est plus en stock : le
+             * remettre une fois de plus revendrait deux fois la meme piece. La
+             * restitution au stock ne concerne donc que ce qui est encore en
+             * rayon au moment du remboursement.
+             *
+             * Elle n'a lieu qu'ici, et non a la demande : une demande de
+             * remboursement peut echouer chez l'operateur, et rendre le stock
+             * avant l'echec de l'appel laisserait des articles en rayon qui
+             * seraient aussi chez le client.
+             */
+            if ($order->status !== OrderStatus::PICKED_UP) {
+                $this->releaseStock($order);
+            }
+
+            $this->payments->forOrder($order)->each(function ($payment): void {
+                if ($payment->isPaid()) {
+                    $payment->update(['status' => PaymentStatus::REFUNDED]);
+                }
+            });
+
+            $order->update(['status' => OrderStatus::REFUNDED]);
+
+            return $order;
+        });
+
+        return $this->reload($committed);
+    }
+
+    /**
+     * L'operateur a refuse le depot : la commande reprend son etat d'avant.
+     *
+     * L'argent n'est jamais sorti, donc rien de ce que le remboursement avait
+     * prepare ne doit rester fait : ni le statut, ni le stock, ni le droit de
+     * retrait. Sans cet etat intermediaire, un echec de depot laisserait une
+     * commande « remboursee » dont l'acheteur n'a rien recu et dont le stand
+     * aurait rendu la marchandise.
+     *
+     * L'etat restitue est celui que la commande avait avant la demande, et non
+     * toujours `paid` : une commande deja prete ou deja retiree n'a pas perdu son
+     * paiement, et la renvoyer a `paid` lui retirerait le droit de retrait que
+     * le stand a deja honore.
+     */
+    public function markRefundFailed(Order $order, OrderStatus $previous = OrderStatus::PAID): Order
+    {
+        $committed = DB::transaction(function () use ($order, $previous): Order {
+            $this->assertCanTransition($order, $previous);
+
+            $order->update(['status' => $previous]);
+
+            return $order;
+        });
+
+        return $this->reload($committed);
+    }
+
+    /**
+     * La transition demandee est-elle permise depuis l'etat courant ?
+     */
+    public function canTransition(Order $order, OrderStatus $target): bool
+    {
+        return in_array($target->value, self::TRANSITIONS[$order->status->value] ?? [], true);
+    }
+
+    /**
+     * Verifie une transition, et explique son refus.
+     *
+     * Le message nomme l'etat courant et l'etat demande : un back-office qui
+     * tente de servir une commande deja servie doit comprendre qu'il a doublon
+     * d'operation, pas lire un refus generique.
+     */
+    public function assertCanTransition(Order $order, OrderStatus $target): void
+    {
+        if ($this->canTransition($order, $target)) {
+            return;
+        }
+
+        throw new ApiException(
+            sprintf(
+                'Une commande au statut « %s » ne peut pas passer au statut « %s ».',
+                $this->statusLabel($order->status),
+                $this->statusLabel($target),
+            ),
+            409,
+            'INVALID_ORDER_TRANSITION',
+            ['current_status' => $order->status->value, 'requested_status' => $target->value],
+        );
+    }
+
+    /**
+     * Transitions possibles depuis l'etat courant.
+     *
+     * Exposee pour que la ressource puisse annoncer la suite au client, qui
+     * n'a pas a deviner quelles actions le back-office propose.
+     *
+     * @return array<int, OrderStatus>
+     */
+    public function allowedTransitions(Order $order): array
+    {
+        return array_map(
+            static fn (int $value): OrderStatus => OrderStatus::from($value),
+            self::TRANSITIONS[$order->status->value] ?? [],
+        );
+    }
+
+    /**
+     * Verifie, sous verrou, que chaque variante demandee est commandable.
+     *
+     * Les lignes sont rendues triees par identifiant interne, quel que soit
+     * l'ordre du panier : le verrou suit donc toujours la meme sequence, et deux
+     * paniers identiques ne peuvent pas s'interbloquer.
+     *
+     * @param  array<int, array{uuid: string, quantity: int}>  $items
+     * @return Collection<int, Variant>
+     */
+    private function lockRequestedVariants(array $items): Collection
+    {
+        $uuids = array_column($items, 'uuid');
+        $variants = $this->variants->lockForSale($uuids);
+
+        $found = $variants->pluck('uuid')->all();
+        $missing = array_values(array_diff($uuids, $found));
+
+        if ($missing !== []) {
+            throw new ApiException(
+                'Certaines declinaisons demandees n\'existent pas ou ne sont plus au catalogue.',
+                422,
+                'VARIANT_NOT_FOUND',
+                ['variants' => $missing],
+            );
+        }
+
+        return $variants;
+    }
+
+    /**
+     * Verifie la vendabilite et fige le prix de chaque ligne.
+     *
+     * Le prix est lu sur la variante verrouillee, donc sur la valeur qui sera
+     * facturee : aucune promotion lancee entre l'affichage et le passage en
+     * caisse ne peut s'appliquer retroactivement, et le client ne peut pas
+     * choisir son prix.
+     *
+     * @param  Collection<int, Variant>  $variants
+     * @param  array<int, array{uuid: string, quantity: int}>  $items
+     * @return array<int, array{variant: Variant, quantity: int, unit_price: int, total: int}>
+     */
+    private function priceLines(Collection $variants, array $items): array
+    {
+        /** @var array<string, int> $quantities */
+        $quantities = [];
+
+        foreach ($items as $item) {
+            $quantities[$item['uuid']] = ($quantities[$item['uuid']] ?? 0) + $item['quantity'];
+        }
+
+        $lines = [];
+
+        foreach ($variants as $variant) {
+            $quantity = $quantities[$variant->uuid];
+
+            $this->assertSellable($variant);
+            $this->assertStockAvailable($variant, $quantity);
+
+            $unitPrice = $this->money->toAmount($variant->price);
+
+            $lines[] = [
+                'variant' => $variant,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total' => $unitPrice * $quantity,
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Une variante publiee et non masquee, dont le produit l'est aussi.
+     *
+     * Le produit est verifie avec la variante : un back-office qui masque un
+     * produit sans toucher a ses declinaisons doit voir disparaitre le produit
+     * entier du tunnel, sinon ses articles resteraient achetables.
+     */
+    private function assertSellable(Variant $variant): void
+    {
+        if ($variant->status !== CatalogStatus::ACTIVE || $variant->product?->status !== CatalogStatus::ACTIVE) {
+            throw new ApiException(
+                'Une des declinaisons demandees n\'est plus en vente.',
+                422,
+                'VARIANT_NOT_SELLABLE',
+                ['variants' => [$variant->uuid]],
+            );
+        }
+    }
+
+    private function assertStockAvailable(Variant $variant, int $quantity): void
+    {
+        if ($variant->stock < $quantity) {
+            throw new ApiException(
+                'Stock insuffisant pour une des declinaisons demandees.',
+                409,
+                'INSUFFICIENT_STOCK',
+                [
+                    'variants' => [[
+                        'uuid' => $variant->uuid,
+                        'available' => $variant->stock,
+                        'requested' => $quantity,
+                    ]],
+                ],
+            );
+        }
+    }
+
+    /**
+     * Enregistre les lignes de commande.
+     *
+     * Le nom du produit et celui de la variante sont copies such chargee. La
+     * facture doit rester fidele a ce qui a ete vendu : relire le catalogue au
+     * moment de l'emission ferait changer un document fiscal apres un
+     * renommage ou un depubliment.
+     *
+     * @param  array<int, array{variant: Variant, quantity: int, unit_price: int, total: int}>  $lines
+     */
+    private function createItems(Order $order, array $lines): void
+    {
+        foreach ($lines as $line) {
+            $variant = $line['variant'];
+
+            $order->items()->create([
+                'product_id' => $variant->product_id,
+                'product_variant_id' => $variant->id,
+                'quantity' => $line['quantity'],
+                'unit_price' => $line['unit_price'],
+                'total_price' => $line['total'],
+                'product_name' => $variant->product?->name ?? 'Article retire du catalogue',
+                'variant_name' => $variant->name,
+
+                /*
+                 * Categorie, taille et couleur sont figees ici, au meme titre que
+                 * le nom : la ligne doit dire ce qui a ete vendu, pas ce que le
+                 * catalogue en dit aujourd'hui. Un produit deplace de categorie
+                 * entre deux festivals laisserait sinon ses ventes de l'ancien
+                 * rayon suivre le produit, et le comptage par taille et par
+                 * couleur deviendrait faux. La spec Data (section 13) en fait des
+                 * donnees exigees par ligne, ce qui suppose qu'elles soient
+                 * lisibles sans remonter au catalogue.
+                 */
+                'product_category' => $variant->product?->category?->name,
+                'size' => $variant->size,
+                'color' => $variant->color,
+            ]);
+        }
+    }
+
+    /**
+     * Rend le stock reserve par une commande.
+     */
+    private function releaseStock(Order $order): void
+    {
+        $order->items()->with('variant')->get()->each(function ($item): void {
+            $variant = $item->variant;
+
+            if ($variant === null) {
+                /*
+                 * La ligne pointe une variante disparue : la cle etrangere est
+                 * en nullOnDelete precisely pour que l'historique comptable
+                 * survive. Le stock correspondant n'appartient plus a personne,
+                 * il n'y a donc rien a rendre.
+                 */
+                return;
+            }
+
+            $this->variants->restock($variant, $item->quantity);
+        });
+    }
+
+    /**
+     * Cree la commande en lui attribuant un numero libre.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createWithUniqueNumber(array $attributes): Order
+    {
+        for ($attempt = 0; $attempt < self::NUMBER_ATTEMPTS; $attempt++) {
+            $orderNumber = $this->generateOrderNumber();
+
+            if ($this->orders->orderNumberExists($orderNumber)) {
+                continue;
+            }
+
+            try {
+                /** @var Order $order */
+                $order = $this->orders->create($attributes + ['order_number' => $orderNumber]);
+
+                return $order;
+            } catch (QueryException $exception) {
+                /*
+                 * Collision survenue entre le controle applicatif et l'ecriture,
+                 * donc un autre tunnel a tire le meme numero. On retente plutot
+                 * que de renvoyer une erreur : le client n'y est pour rien, et la
+                 * transaction qui contient ce decrement de stock ne doit pas
+                 * echouer pour un detail de numerotation.
+                 */
+                if (! $this->isOrderNumberConflict($exception)) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw new ApiException(
+            'Impossible d\'attribuer un numero de commande. Reessayez dans un instant.',
+            503,
+            'ORDER_NUMBER_UNAVAILABLE',
+        );
+    }
+
+    /**
+     * Numero de commande lisible au guichet.
+     *
+     * La forme reprend celle de la factory, `TDEV-AAAAMMJJ-XXXXXX` : le prefixe
+     * identifie la campagne, la date permet de lire a voix haute quand la vente
+     * a eu lieu, et la partie aleatoire evite la collision.
+     */
+    private function generateOrderNumber(): string
+    {
+        return sprintf(
+            '%s-%s-%s',
+            (string) config('orders.numbering.prefix'),
+            now()->format('Ymd'),
+            Str::upper(Str::random(6)),
+        );
+    }
+
+    /**
+     * L'echec vient-il bien de l'unicite du numero de commande ?
+     */
+    private function isOrderNumberConflict(QueryException $exception): bool
+    {
+        return str_contains($exception->getMessage(), 'order_number');
+    }
+
+    /**
+     * Applique une transition d'etat autorisee.
+     *
+     * Ne verifie que la legalite de la transition : le controle propre a chaque
+     * etat (commande de stand, retrait) est pose par la methode exposee qui
+     * l'appelle, pour qu'un reglement reste possible sur une commande livree.
+     */
+    private function transition(Order $order, OrderStatus $target): Order
+    {
+        return DB::transaction(function () use ($order, $target): Order {
+            $this->assertCanTransition($order, $target);
+
+            $order->update(['status' => $target]);
+
+            return $this->reload($order);
+        });
+    }
+
+    /**
+     * Les transitions de stand ne concernent que les commandes de retrait.
+     */
+    private function assertPickupOrder(Order $order): void
+    {
+        if ($order->fulfillment_method !== FulfillmentMethod::PICKUP) {
+            throw new ApiException(
+                'Cette commande est livree : elle n\'a pas de retrait a enregistrer au stand.',
+                409,
+                'NOT_A_PICKUP_ORDER',
+            );
+        }
+    }
+
+    /**
+     * Relecture complete apres ecriture, pour la ressource.
+     */
+    private function reload(Order $order): Order
+    {
+        return $this->orders->findWithRelations($order->uuid, [
+            'items.variant',
+            'user',
+            'payments',
+            'invoice',
+            'pickupAgent',
+        ]);
+    }
+
+    /**
+     * Libelle lisible d'un statut, pour les messages d'erreur.
+     */
+    private function statusLabel(OrderStatus $status): string
+    {
+        return match ($status) {
+            OrderStatus::PENDING_PAYMENT => 'en attente de paiement',
+            OrderStatus::PAID => 'payée',
+            OrderStatus::READY_FOR_PICKUP => 'prête au retrait',
+            OrderStatus::PICKED_UP => 'retirée',
+            OrderStatus::CANCELLED => 'annulée',
+            OrderStatus::REFUNDED => 'remboursée',
+            OrderStatus::REFUND_PENDING => 'remboursement en attente',
+        };
+    }
+}

@@ -1,0 +1,3216 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Laravel",
+    "version": "v1",
+    "description": "API du festival TDEV : authentification par session et catalogue merch (catégories, produits, variantes). L'authentification repose sur un cookie de session accompagné du jeton CSRF : la route `/auth/csrf-token` fournit ce jeton, et toute écriture doit renvoyer l'en-tête `X-XSRF-TOKEN`. Les réponses sont en camelCase, les requêtes et les query parameters en snake_case. Les lectures du catalogue sont publiques et ne renvoient que les éléments actifs ; les écritures exigent le rôle administrateur."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000/api"
+    }
+  ],
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "paths": {
+    "/v1/auth/csrf-token": {
+      "get": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Obtenir le jeton CSRF",
+        "operationId": "3eb240eb8baa52959a0832ee5667e21c",
+        "responses": {
+          "200": {
+            "description": "Jeton genere"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Creer un compte",
+        "operationId": "6e90ab42d11e6faace547041bbe7bc0f",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Compte cree",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Donnees invalides"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Ouvrir une session",
+        "operationId": "64cb4b759fee0be0959b1466ce65530e",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session ouverte",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Identifiants invalides"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Fermer la session",
+        "operationId": "894fd7b7421701e2381c33cf5c77470d",
+        "responses": {
+          "200": {
+            "description": "Session fermee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Lire le profil courant",
+        "operationId": "ab6fddcd5e2cbd20436e09e812d97e1f",
+        "responses": {
+          "200": {
+            "description": "Profil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/categories": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Lister les categories",
+        "operationId": "0a010ed5d41107ef227e98b7a045d1c1",
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection paginee"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Creer une categorie",
+        "operationId": "c71c2924d6467d50dfda813bfeb3daa4",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Categorie creee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/categories/{uuid}": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Lire une categorie",
+        "operationId": "9daf3fbde483bfb4c9ca0f8820683523",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Categorie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Categorie introuvable"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Modifier une categorie",
+        "operationId": "81527d5dbfd62f0c0a42d0aaefaf0d12",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Categorie modifiee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Supprimer une categorie",
+        "operationId": "69261b94c39f5efd197e441a62278ea2",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Categorie supprimee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Sante"
+        ],
+        "summary": "Verifier la disponibilite",
+        "operationId": "daeb2cf09f67b230b7dfbae80de3b687",
+        "responses": {
+          "200": {
+            "description": "API disponible"
+          },
+          "503": {
+            "description": "Dependance indisponible"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders": {
+      "get": {
+        "tags": [
+          "Commandes"
+        ],
+        "summary": "Lister mes commandes",
+        "operationId": "afc75c3e7b43860d8d04a908c049b866",
+        "responses": {
+          "200": {
+            "description": "Collection paginee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Commandes"
+        ],
+        "summary": "Creer une commande",
+        "operationId": "5aa73ad66d9d7a5e3f156b5c37a975d5",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Commande creee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}": {
+      "get": {
+        "tags": [
+          "Commandes"
+        ],
+        "summary": "Lire une commande",
+        "operationId": "a0e756311beb78ebc2e2d0ebbc475f1d",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Order-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commande",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Order"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/cancel": {
+      "post": {
+        "tags": [
+          "Commandes"
+        ],
+        "summary": "Annuler une commande",
+        "operationId": "dcd3fec1f1edc31276d5f915443b52ca",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commande annulee"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/qr": {
+      "get": {
+        "tags": [
+          "Retrait"
+        ],
+        "summary": "Telecharger le QR de retrait",
+        "operationId": "26a6d9e4b4453551af39c063d0b892ba",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image PNG du QR"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/pickup/orders": {
+      "get": {
+        "tags": [
+          "Retrait"
+        ],
+        "summary": "Lister la file de retrait",
+        "operationId": "81de3b08f78d86c2f58b1b8d3bf9a09b",
+        "responses": {
+          "200": {
+            "description": "File de retrait"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/pickup/scan": {
+      "post": {
+        "tags": [
+          "Retrait"
+        ],
+        "summary": "Scanner une commande",
+        "operationId": "7c65d2d91146b47cdd7e985afa9e3fb2",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PickupScanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Commande retiree"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/ready": {
+      "post": {
+        "tags": [
+          "Retrait"
+        ],
+        "summary": "Marquer une commande prete",
+        "operationId": "9d58552d8d6cda007a030ccd542a8b4d",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commande prete"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/picked-up": {
+      "post": {
+        "tags": [
+          "Retrait"
+        ],
+        "summary": "Marquer une commande retiree",
+        "operationId": "48972500aa73133a294411d24a203fa5",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commande retiree"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/payments/webhooks/fedapay": {
+      "post": {
+        "tags": [
+          "Paiements"
+        ],
+        "summary": "Recevoir une notification FedaPay",
+        "description": "Le header X-FEDAPAY-SIGNATURE est obligatoire et signe `<horodatage>.<corps>`. Le corps contient une enveloppe data ou object. Les evenements pending, refund et remboursement partiel sont acquittes sans confirmer un paiement.",
+        "operationId": "21d2fbec10138cf7332e22aec56907fb",
+        "parameters": [
+          {
+            "name": "X-FEDAPAY-SIGNATURE",
+            "in": "header",
+            "description": "Format t=timestamp,s=signature. La signature porte sur timestamp.corporel.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "t=1730000000,s=abcdef123456"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FedapayWebhookEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification comprise et acquittee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature invalide ou horodatage hors fenetre"
+          },
+          "422": {
+            "description": "Evenement illisible ou statut inconnu"
+          },
+          "503": {
+            "description": "Secret de webhook non configure"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/payments/webhooks/kkiapay": {
+      "post": {
+        "operationId": "v1.payments.webhooks.kkiapay",
+        "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+        "summary": "Notification de paiement d'un operateur",
+        "tags": [
+          "PaymentWebhook"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification rapprochee, paiement accepte ou refuse.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderUuid": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orderUuid",
+                        "orderNumber",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Notification signee mais mal formee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Code d'erreur stable, indépendant du texte du message.",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "INVALID_FILTER"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                        },
+                        "details": {
+                          "type": "object",
+                          "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                          "properties": {
+                            "fields": {
+                              "type": "object",
+                              "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "details"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature absente ou invalide : la notification n’est pas traitee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/payments/webhooks/paygate": {
+      "post": {
+        "operationId": "v1.payments.webhooks.paygate",
+        "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+        "summary": "Notification de paiement d'un operateur",
+        "tags": [
+          "PaymentWebhook"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification rapprochee, paiement accepte ou refuse.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderUuid": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orderUuid",
+                        "orderNumber",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Notification signee mais mal formee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Code d'erreur stable, indépendant du texte du message.",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "INVALID_FILTER"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                        },
+                        "details": {
+                          "type": "object",
+                          "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                          "properties": {
+                            "fields": {
+                              "type": "object",
+                              "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "details"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature absente ou invalide : la notification n’est pas traitee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/payments/webhooks/flooz": {
+      "post": {
+        "operationId": "v1.payments.webhooks.flooz",
+        "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+        "summary": "Notification de paiement d'un operateur",
+        "tags": [
+          "PaymentWebhook"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification rapprochee, paiement accepte ou refuse.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderUuid": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orderUuid",
+                        "orderNumber",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Notification signee mais mal formee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Code d'erreur stable, indépendant du texte du message.",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "INVALID_FILTER"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                        },
+                        "details": {
+                          "type": "object",
+                          "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                          "properties": {
+                            "fields": {
+                              "type": "object",
+                              "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "details"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature absente ou invalide : la notification n’est pas traitee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/payments/webhooks/tmoney": {
+      "post": {
+        "operationId": "v1.payments.webhooks.tmoney",
+        "description": "La reponse est un 200 tant que la notification a ete comprise et\nrapprochee, y compris pour un echec de paiement annonce par l'operateur :\nune notification d'echec est une information attendue, pas une erreur de\nl'API. Seul un rapprochement impossible renvoie autre chose qu'un 200,\nce qui pousse l'operateur a reessayer.",
+        "summary": "Notification de paiement d'un operateur",
+        "tags": [
+          "PaymentWebhook"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification rapprochee, paiement accepte ou refuse.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderUuid": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orderUuid",
+                        "orderNumber",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Notification signee mais mal formee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "description": "Code d'erreur stable, indépendant du texte du message.",
+                          "enum": [
+                            "VALIDATION_ERROR",
+                            "INVALID_FILTER"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                        },
+                        "details": {
+                          "type": "object",
+                          "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                          "properties": {
+                            "fields": {
+                              "type": "object",
+                              "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "details"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature absente ou invalide : la notification n’est pas traitee.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/v1/products": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Lister les produits",
+        "operationId": "e58a4e718912e6735fe015df2a79ca75",
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "category_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection paginee"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Creer un produit",
+        "operationId": "4e390b12f829710225b0c006bcf204e0",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Produit cree"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/products/{uuid}": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Lire un produit",
+        "operationId": "debe84e54f4272eafe825f36ebdc4ec5",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product"
+                }
+              }
+            }
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Modifier un produit",
+        "operationId": "b2a2db547d7435d379db3af1559edbb9",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Produit modifie"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Supprimer un produit",
+        "operationId": "6aee4264b466974abe36f0cd7a11e174",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produit supprime"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/products/{uuid}/variants": {
+      "get": {
+        "tags": [
+          "Catalogue"
+        ],
+        "summary": "Lister les variantes",
+        "operationId": "a5fdeef4b4e45b487450fe8a1b3e7e9a",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variantes"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/payment": {
+      "post": {
+        "tags": [
+          "Paiements"
+        ],
+        "summary": "Ouvrir le paiement d'une commande",
+        "description": "Aucun body. Le montant, la devise et le moyen de paiement viennent de la commande. Le client est redirige vers checkoutUrl, une page hebergee par FedaPay. L'appel est idempotent et n'encaisse rien tant que le webhook n'a pas confirme le paiement.",
+        "operationId": "03906ebb0c20621d807f74937f77c3ad",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Order-Token",
+            "in": "header",
+            "description": "Obligatoire pour une commande invitee. Non requis avec une session autorisee.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paiement ouvert",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentResource"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Commande d'un autre compte ou acces absent"
+          },
+          "409": {
+            "description": "Commande deja reglee ou annulee"
+          },
+          "429": {
+            "description": "Trop de demandes"
+          },
+          "502": {
+            "description": "Operateur injoignable"
+          },
+          "503": {
+            "description": "Prestataire non configure"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/orders/{uuid}/refund": {
+      "post": {
+        "tags": [
+          "Paiements"
+        ],
+        "summary": "Demander le remboursement d'une commande",
+        "description": "Aucun body. La route cree une demande de remboursement ; le statut final depend de la notification de depot FedaPay.",
+        "operationId": "e5dd779e7b8b7dcec9d563836da72964",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Demande de remboursement enregistree"
+          },
+          "409": {
+            "description": "Commande non remboursable"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/events": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Enregistrer des evenements analytics",
+        "operationId": "a94426a845a4ebc8b6caefb75d635c1c",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyticsEventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Evenements enregistres"
+          },
+          "422": {
+            "description": "Payload invalide"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    },
+    "/v1/payments/webhooks/{provider}": {
+      "post": {
+        "tags": [
+          "Paiements"
+        ],
+        "summary": "Recevoir une notification de paiement generique",
+        "description": "Utilise le corps plat et la signature HMAC des agregateurs generiques. FedaPay utilise la route dediee ci-dessous.",
+        "operationId": "d68bd401d02d70e0b40dfd05011a4109",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "kkiapay",
+                "paygate",
+                "flooz",
+                "tmoney"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification traitee"
+          },
+          "401": {
+            "description": "Signature invalide"
+          }
+        },
+        "servers": [
+          {
+            "url": "/api/v1",
+            "description": "API v1"
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "description": "Cookie de session posé par la route de connexion. Les écritures exigent en plus l'en-tête `X-XSRF-TOKEN`, obtenu via `/auth/csrf-token`.",
+        "in": "cookie",
+        "name": "laravel-session"
+      }
+    },
+    "schemas": {
+      "CatalogStatus": {
+        "type": "integer",
+        "description": "Statut de publication d'un element du catalogue. Partage par les categories, produits et variantes : ces trois entites obeissent au meme cycle de vie (on publie un produit, on ne le supprime pas, on le retire de la vente). Un enum par entite serait dupliquation.  Les valeurs sont stockees en base, donc consideres comme figees : les applications partenaires (app de scan, back-office) s'y branchent.\n| |\n|---|\n| `0` <br/> Element masque du catalogue, conserve pour l'historique des commandes. |\n| `1` <br/> Element visible et achetable. |",
+        "enum": [
+          0,
+          1
+        ],
+        "title": "CatalogStatus"
+      },
+      "CategoryResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "productsCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "slug",
+          "status",
+          "productsCount"
+        ],
+        "title": "CategoryResource"
+      },
+      "FulfillmentMethod": {
+        "type": "string",
+        "description": "Mode de retrait d'une commande. Le tunnel d'achat propose ces deux choix au moment du checkout ; ils ne sont pas equivalents pour le suivi : seule une commande en retrait genere un QR Code a scanner au stand merch.\n| |\n|---|\n| `pickup` <br/> Retrait sur place le jour J au stand merch, via QR Code. |\n| `delivery` <br/> Expedition par un transporteur. |",
+        "enum": [
+          "pickup",
+          "delivery"
+        ],
+        "title": "FulfillmentMethod"
+      },
+      "InvoiceResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "invoiceNumber": {
+            "type": "string"
+          },
+          "subTotal": {
+            "type": "string"
+          },
+          "discount": {
+            "type": "string"
+          },
+          "total": {
+            "type": "string"
+          },
+          "issuedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid",
+          "invoiceNumber",
+          "subTotal",
+          "discount",
+          "total",
+          "issuedAt"
+        ],
+        "title": "InvoiceResource"
+      },
+      "JsonResource": {
+        "type": "string",
+        "title": "JsonResource"
+      },
+      "LoginRequest": {
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 72
+          },
+          "remember": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "type": "object"
+      },
+      "OrderItemResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "productUuid": {
+            "type": "string",
+            "description": "Identifiants du catalogue, pour le lien « voir le produit » du\nback-office. Ils ne sont pas suffisants pour reconstruire le\nprix : c'est `unitPrice` qui fait foi."
+          },
+          "variantUuid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "productName": {
+            "type": "string"
+          },
+          "variantName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "unitPrice": {
+            "type": "string"
+          },
+          "totalPrice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uuid",
+          "productUuid",
+          "productName",
+          "quantity",
+          "unitPrice",
+          "totalPrice"
+        ],
+        "title": "OrderItemResource"
+      },
+      "OrderResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "orderNumber": {
+            "type": "string",
+            "description": "Reference lisible, dite au client. L'uuid reste la cle technique :\nun numero sequentiel serait devinable, et cette API n'a pas a\ndependre du secret d'un identifiant."
+          },
+          "status": {
+            "type": "integer"
+          },
+          "fulfillmentMethod": {
+            "type": "string"
+          },
+          "pickupStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le droit de retrait et l'usage sont deux etats distincts : une\ncommande payee a un droit ouvert alors qu'aucun retrait n'a encore\neu lieu. Les confondre ferait apparaitre un retrait enregistre\nqui n'existe pas dans le suivi du plan de tracking."
+          },
+          "pickupTime": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "participantId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subTotal": {
+            "type": "string"
+          },
+          "discount": {
+            "type": "string"
+          },
+          "total": {
+            "type": "string"
+          },
+          "shippingAddress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemResource"
+            }
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentResource"
+            }
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceResource"
+          },
+          "pickupQrPayload": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le contenu du QR n'est rendu que pour la commande concernee et\npour un tiers de confiance : un client qui liste ses commandes\nn'a pas a telecharger cinq PNG d'affilee, et un tiers ne doit pas\npouvoir fabriquer un QR d'une commande qui n'est pas la sienne. L'invite qui detient le jeton de sa commande compte comme son\nproprietaire : sans cela, un client sans compte payerait puis ne\npourrait pas afficher le QR que son paiement vient d'ouvrir."
+          },
+          "guestAccessToken": {
+            "type": "null",
+            "description": "Jeton d'acces d'une commande invitee, renvoye une seule fois, a la\ncreation. Le client doit le conserver : il n'est ni devinable depuis\nl'uuid de la commande, ni rejouable apres coup, ni recuperable par\nla suite, exactement comme un mot de passe."
+          },
+          "createdAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allowedActions": {
+            "type": "array",
+            "description": "Transitions possibles, pour que le back-office n'essaie pas une\naction refusée et que le client sache s'il peut encore annuler.\nLe service est la seule source de verite sur ces transitions.",
+            "items": {}
+          }
+        },
+        "required": [
+          "uuid",
+          "orderNumber",
+          "status",
+          "fulfillmentMethod",
+          "subTotal",
+          "discount",
+          "total"
+        ],
+        "title": "OrderResource"
+      },
+      "PaymentMethod": {
+        "type": "string",
+        "description": "Moyen de paiement utilise par l'acheteur. Distinct de PaymentProvider : la methode est ce que l'acheteur a choisi (mobile money, carte), le fournisseur est l'infrastructure qui a traite l'appel (FedaPay, KKiaPay...). Un seul aggregateur peut encaisser les deux methodes, d'ou la separation.\n| |\n|---|\n| `mobile_money` <br/> Mobile Money togoise (Flooz, T-Money) via un aggregateur. |\n| `card` <br/> Carte bancaire via un agregateur. |",
+        "enum": [
+          "mobile_money",
+          "card"
+        ],
+        "title": "PaymentMethod"
+      },
+      "PaymentNotificationRequest": {
+        "description": "Corps plat des notifications des agregateurs generiques. Cette structure ne s applique pas au webhook FedaPay.",
+        "required": [
+          "reference",
+          "status",
+          "amount"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "transaction_id": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 190
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "success",
+              "successful",
+              "failed",
+              "refused"
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "example": "2500"
+          },
+          "failure_reason": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        },
+        "type": "object"
+      },
+      "PaymentResource": {
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "participantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "XOF",
+            "nullable": true
+          },
+          "amount": {
+            "type": "string",
+            "example": "2500"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "mobile_money",
+              "card"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "example": "fedapay",
+            "nullable": true
+          },
+          "status": {
+            "description": "1 pending, 2 success, 3 failed, 4 refunded.",
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "transactionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "failureReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "failedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "PickupScanRequest": {
+        "required": [
+          "payload"
+        ],
+        "properties": {
+          "payload": {
+            "description": "Contenu JSON du QR de retrait.",
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "type": "object"
+      },
+      "ProductResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "category": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "La categorie est exposee en identifiant, nom et slug plutot qu'en\nressource imbriquee complete : un menu de navigation n'a besoin de\nrien d'autre, et une ressource imbriquee alourdirait chaque ligne\ndu catalogue pour rien.",
+            "properties": {
+              "uuid": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "uuid",
+              "name",
+              "slug"
+            ]
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VariantResource"
+            }
+          },
+          "variantsCount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "priceFrom": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isAvailable": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "uuid",
+          "name",
+          "slug",
+          "status",
+          "isAvailable"
+        ],
+        "title": "ProductResource"
+      },
+      "RegisterRequest": {
+        "required": [
+          "firstname",
+          "lastname",
+          "phone",
+          "email",
+          "password",
+          "password_confirmation"
+        ],
+        "properties": {
+          "firstname": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2
+          },
+          "lastname": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2
+          },
+          "phone": {
+            "type": "string",
+            "pattern": "^\\+?228[0-9]{8}$",
+            "example": "+22890123456"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "maxLength": 72,
+            "minLength": 8
+          },
+          "password_confirmation": {
+            "type": "string",
+            "format": "password"
+          }
+        },
+        "type": "object"
+      },
+      "StoreCategoryRequest": {
+        "type": "object",
+        "description": "Payload de creation d'une categorie.\n\nLe `slug` est facultatif : absent, il est derive du nom par le service,\nqui garantit l'unicite. Il reste acceptable pour un import ou une URL\nimposee, auquel cas le service refuse toute collision.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 150
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 5000
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`alpha_dash` et non une regexp ouverte : le slug finit dans une\nURL et dans un nom de fichier, donc il ne doit contenir ni\nespace ni accent. Le service applique Str::slug() de toute\nfaçon, cette règle évite seulement d'accepter puis de\ntransformer silencieusement une valeur déjà invalide.",
+            "maxLength": 150
+          },
+          "status": {
+            "description": "Enum fermé, sans liste de chaînes en dur : CatalogStatus est la\nseule source des valeurs acceptables, donc ajouter un statut doit\npasser par une migration du modèle et non par une chaîne acceptée\nen base.\n\n| |\n|---|\n| `0` <br/> Element masque du catalogue, conserve pour l'historique des commandes. |\n| `1` <br/> Element visible et achetable. |",
+            "$ref": "#/components/schemas/CatalogStatus"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "StoreCategoryRequest"
+      },
+      "StoreOrderRequest": {
+        "required": [
+          "items",
+          "customer_name",
+          "customer_phone_number",
+          "fulfillment_method",
+          "payment_method"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemInput"
+            },
+            "maxItems": 20,
+            "minItems": 1
+          },
+          "customer_name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2
+          },
+          "customer_phone_number": {
+            "type": "string",
+            "example": "+22890123456"
+          },
+          "customer_phone_country": {
+            "type": "string",
+            "example": "tg",
+            "nullable": true,
+            "maxLength": 2,
+            "minLength": 2
+          },
+          "fulfillment_method": {
+            "type": "string",
+            "enum": [
+              "pickup",
+              "delivery"
+            ]
+          },
+          "shipping_address": {
+            "description": "Obligatoire si fulfillment_method vaut delivery.",
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "minLength": 5
+          },
+          "payment_method": {
+            "type": "string",
+            "enum": [
+              "mobile_money",
+              "card"
+            ]
+          },
+          "participant_id": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          }
+        },
+        "type": "object"
+      },
+      "StoreProductRequest": {
+        "type": "object",
+        "description": "Payload de création d'un produit.\n\nUn produit vendable porte toujours un prix, donc l'API refuse d'en créer un\nqui n'en aurait pas : soit le produit est découpé en variantes, soit il\nporte une `default_variant` dont le prix et le stock sont exigés. La\ncohérence des deux est vérifiée en fin de validation, car elle porte sur la\nprésence des clés et non sur la valeur d'un champ.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 10000
+          },
+          "category_id": {
+            "type": "integer",
+            "description": "`whereNull('deleted_at')` : une catégorie supprimée logiquement\nn'est pas une destination valide, alors que la ligne existe\nencore en base. Sans cette condition, la validation passerait et\nle produit deviendrait invisible du catalogue public."
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "status": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "uuid": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "L'uuid identifie une variante existante de CE produit. Il est\nfacultatif : son absence ne signifie pas « créé » de façon\ncertaine, car le service reconnaît aussi une variante à partir de\nson SKU. C'est pourquoi un uuid inconnu est refusé par le service\n(422) et non ignoré par la validation."
+                },
+                "sku": {
+                  "type": "string",
+                  "description": "La référence vendue au guichet : 100 caractères suffisent\nlargement, la borne évite un payload arbitrairement long en base.",
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 150
+                },
+                "price": {
+                  "type": "string",
+                  "description": "Prix en francs CFA, donc un entier : le franc CFA n'a pas de\nsubdivision, et « 2500,50 » n'est ni encaisseable par un mobile\nmoney ni affichable sur un ticket. Un prix non entier est refusé\nplutôt qu'arrondi, parce qu'un arrondi silencieux laisserait croire à\nun montant que personne n'a choisi. Le format est tolérant : « 2500 », « 2500.00 » et « 2500,00 »\ndésignent la même somme, parce qu'un back-office saisit au clavier\nn'écrit pas forcément la forme de l'API."
+                },
+                "stock": {
+                  "type": "integer",
+                  "description": "Le stock recoupe la contrainte CHECK (stock >= 0) de la base, qui\nne s'applique qu'à PostgreSQL et MySQL. La valider ici rend le\ncomportement identique sur SQLite, où la contrainte n'existe pas,\net évite un 500 sur une base qui, elle, l'applique.",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                "status": {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                }
+              },
+              "required": [
+                "sku",
+                "name",
+                "price",
+                "stock"
+              ]
+            }
+          },
+          "default_variant": {
+            "type": "object",
+            "properties": {
+              "sku": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 100
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1,
+                "maxLength": 150
+              },
+              "price": {
+                "type": "string"
+              },
+              "stock": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4294967295
+              },
+              "status": {
+                "$ref": "#/components/schemas/CatalogStatus"
+              }
+            }
+          }
+        },
+        "required": [
+          "name",
+          "category_id"
+        ],
+        "title": "StoreProductRequest"
+      },
+      "UpdateCategoryRequest": {
+        "type": "object",
+        "description": "Payload de mise a jour d'une categorie.\n\nToutes les regles sont facultatives : une mise a jour partielle (le\nback-office renomme une categorie sans y toucher) ne doit pas avoir a\nrenvoyer le descriptif complet. Le service separe alors les cles presentes\ndes cles absentes.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 150
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 5000
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 150
+          },
+          "status": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          }
+        },
+        "title": "UpdateCategoryRequest"
+      },
+      "UpdateProductRequest": {
+        "type": "object",
+        "description": "Payload de mise a jour d'un produit.\n\nChaque champ est facultatif, ce qui autorise deux usages distincts et\nlegitimes : corriger un libelle sans toucher aux declinaisons, ou renvoyer la\nliste complete des variantes pour la resynchroniser.\n\nL'absence de la cle `variants` signifie « variantes inchangees ». Une liste\nvide signifie « plus aucune variante ». Le service fait cette distinction ;\nla validation ne peut que la permettre, pas l'interpreter.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 10000
+          },
+          "category_id": {
+            "type": "integer",
+            "description": "`whereNull('deleted_at')` : une catégorie supprimée logiquement\nn'est pas une destination valide, alors que la ligne existe\nencore en base. Sans cette condition, la validation passerait et\nle produit deviendrait invisible du catalogue public."
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200
+          },
+          "status": {
+            "$ref": "#/components/schemas/CatalogStatus"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "uuid": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid",
+                  "description": "L'uuid identifie une variante existante de CE produit. Il est\nfacultatif : son absence ne signifie pas « créé » de façon\ncertaine, car le service reconnaît aussi une variante à partir de\nson SKU. C'est pourquoi un uuid inconnu est refusé par le service\n(422) et non ignoré par la validation."
+                },
+                "sku": {
+                  "type": "string",
+                  "description": "La référence vendue au guichet : 100 caractères suffisent\nlargement, la borne évite un payload arbitrairement long en base.",
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 150
+                },
+                "price": {
+                  "type": "string",
+                  "description": "Prix en francs CFA, donc un entier : le franc CFA n'a pas de\nsubdivision, et « 2500,50 » n'est ni encaisseable par un mobile\nmoney ni affichable sur un ticket. Un prix non entier est refusé\nplutôt qu'arrondi, parce qu'un arrondi silencieux laisserait croire à\nun montant que personne n'a choisi. Le format est tolérant : « 2500 », « 2500.00 » et « 2500,00 »\ndésignent la même somme, parce qu'un back-office saisit au clavier\nn'écrit pas forcément la forme de l'API."
+                },
+                "stock": {
+                  "type": "integer",
+                  "description": "Le stock recoupe la contrainte CHECK (stock >= 0) de la base, qui\nne s'applique qu'à PostgreSQL et MySQL. La valider ici rend le\ncomportement identique sur SQLite, où la contrainte n'existe pas,\net évite un 500 sur une base qui, elle, l'applique.",
+                  "minimum": 0,
+                  "maximum": 4294967295
+                },
+                "status": {
+                  "$ref": "#/components/schemas/CatalogStatus"
+                }
+              },
+              "required": [
+                "sku",
+                "name",
+                "price",
+                "stock"
+              ]
+            }
+          }
+        },
+        "title": "UpdateProductRequest"
+      },
+      "VariantResource": {
+        "type": "object",
+        "properties": {
+          "uuid": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string",
+            "description": "Prix en francs CFA, entier : le franc CFA n'a pas de subdivision,\net un entier en JSON ne peut pas perdre de precision a l'aller-\nretour comme le ferait un flottant."
+          },
+          "stock": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "uuid",
+          "sku",
+          "name",
+          "price",
+          "stock",
+          "status",
+          "isAvailable"
+        ],
+        "title": "VariantResource"
+      },
+      "User": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstname": {
+            "type": "string"
+          },
+          "lastname": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "example": "customer"
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object"
+      },
+      "Category": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object"
+      },
+      "Variant": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          },
+          "price": {
+            "type": "integer",
+            "example": 2500
+          },
+          "stock": {
+            "type": "integer",
+            "example": 12
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          }
+        },
+        "type": "object"
+      },
+      "Product": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            }
+          }
+        },
+        "type": "object"
+      },
+      "Order": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string",
+            "example": "ORD-20260930-0001"
+          },
+          "status": {
+            "type": "string",
+            "example": "pending_payment"
+          },
+          "fulfillmentMethod": {
+            "type": "string",
+            "example": "pickup"
+          },
+          "total": {
+            "type": "integer",
+            "example": 2500
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object"
+      },
+      "CategoryRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 2
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "nullable": true,
+            "maxLength": 150
+          },
+          "status": {
+            "description": "0 = inactive, 1 = active.",
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "VariantInput": {
+        "required": [
+          "sku",
+          "name",
+          "price",
+          "stock"
+        ],
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "size": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "price": {
+            "type": "integer",
+            "example": 2500,
+            "minimum": 0
+          },
+          "stock": {
+            "type": "integer",
+            "example": 20,
+            "minimum": 0
+          },
+          "status": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ProductRequest": {
+        "description": "A la creation, envoyer variants ou default_variant, mais pas les deux. A la mise a jour, tous les champs sont facultatifs.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 10000
+          },
+          "image_url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "maxLength": 2048
+          },
+          "category_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VariantInput"
+            }
+          },
+          "default_variant": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DefaultVariantInput"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "OrderItemInput": {
+        "required": [
+          "uuid",
+          "quantity"
+        ],
+        "properties": {
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 20,
+            "minimum": 1
+          }
+        },
+        "type": "object"
+      },
+      "AnalyticsEventsRequest": {
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "required": [
+                "event_name",
+                "event_time",
+                "session_id"
+              ],
+              "properties": {
+                "event_name": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "event_time": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "session_id": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "participant_id": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 100
+                },
+                "page": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 500
+                },
+                "product_id": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 64
+                },
+                "device_type": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 50
+                },
+                "browser": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 100
+                },
+                "os": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 100
+                },
+                "source": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 100
+                },
+                "campaign": {
+                  "type": "string",
+                  "nullable": true,
+                  "maxLength": 100
+                },
+                "properties": {
+                  "type": "object",
+                  "nullable": true,
+                  "additionalProperties": true
+                }
+              },
+              "type": "object"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          }
+        },
+        "type": "object"
+      },
+      "FedapayWebhookEvent": {
+        "description": "Notification signee par FedaPay. Le header X-FEDAPAY-SIGNATURE est obligatoire et le corps doit rester intact.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "example": "transaction.approved",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "example": "transaction.approved",
+            "nullable": true
+          },
+          "data": {
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 9001
+              },
+              "reference": {
+                "type": "string",
+                "example": "FEDAPAY-9001"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "transferred",
+                  "declined",
+                  "canceled",
+                  "refunded",
+                  "approved_partially_refunded",
+                  "transferred_partially_refunded"
+                ]
+              },
+              "amount": {
+                "type": "integer",
+                "example": 2500
+              },
+              "metadata": {
+                "type": "object",
+                "nullable": true,
+                "additionalProperties": true
+              },
+              "custom_metadata": {
+                "type": "object",
+                "nullable": true,
+                "additionalProperties": true
+              }
+            },
+            "type": "object",
+            "nullable": true
+          },
+          "object": {
+            "description": "Alternative a data selon la representation FedaPay.",
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          }
+        },
+        "type": "object"
+      },
+      "DefaultVariantInput": {
+        "required": [
+          "price",
+          "stock"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 150,
+            "minLength": 1
+          },
+          "size": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "color": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 50
+          },
+          "price": {
+            "type": "integer",
+            "example": 2500,
+            "minimum": 0
+          },
+          "stock": {
+            "type": "integer",
+            "example": 20,
+            "minimum": 0
+          },
+          "status": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    "responses": {
+      "ValidationException": {
+        "description": "Données envoyées invalides. `details.fields` nomme chaque champ refusé.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Code d'erreur stable, indépendant du texte du message.",
+                      "enum": [
+                        "VALIDATION_ERROR",
+                        "INVALID_FILTER"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                    },
+                    "details": {
+                      "type": "object",
+                      "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                      "properties": {
+                        "fields": {
+                          "type": "object",
+                          "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "details"
+                  ]
+                }
+              },
+              "required": [
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      "AuthenticationException": {
+        "description": "Authentification requise. Ouvrir une session via `POST /auth/login`.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Code d'erreur stable, indépendant du texte du message.",
+                      "enum": [
+                        "UNAUTHENTICATED"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                    },
+                    "details": {
+                      "type": "object",
+                      "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                      "properties": {
+                        "fields": {
+                          "type": "object",
+                          "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "details"
+                  ]
+                }
+              },
+              "required": [
+                "error"
+              ]
+            }
+          }
+        }
+      },
+      "AuthorizationException": {
+        "description": "Rôle insuffisant pour cette opération. La session est valide, le compte ne l'est pas.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "description": "Cause de l'échec, exposée pour que le client puisse la traiter sans analyser le message.",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Code d'erreur stable, indépendant du texte du message.",
+                      "enum": [
+                        "FORBIDDEN"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Message destiné à l'affichage, en français. Le texte est libre d'évoluer : seul le `code` est stable et doit être utilisé pour brancher une logique."
+                    },
+                    "details": {
+                      "type": "object",
+                      "description": "Précisions sur la cause. Objet vide, ou porteur de `fields` pour une erreur de validation.",
+                      "properties": {
+                        "fields": {
+                          "type": "object",
+                          "description": "Messages de validation, indexés par le nom du champ tel que le client l'a envoyé. Les clés ne sont pas converties en camelCase, afin de rester retrouvables dans la requête d'origine.",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "details"
+                  ]
+                }
+              },
+              "required": [
+                "error"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

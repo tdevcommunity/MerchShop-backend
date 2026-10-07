@@ -1,0 +1,20 @@
+# Dependances installees dans l'image, jamais remontees depuis l'hote.
+vendor/
+node_modules/
+
+# Secrets locaux, injectes par docker-compose.
+.env
+.env.*
+!.env.example
+
+# Artefacts de build et caches.
+public/build/
+public/hot
+bootstrap/cache/*.php
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*.log
+.phpunit.result.cache
+.phpunit.cache/
+.php-cs-fixer.cache
