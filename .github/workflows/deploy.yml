@@ -8,9 +8,11 @@
 
 name: Deploy
 
+# Declenchement automatique suspendu en attendant que GitHub Actions soit
+# operationnel sur le compte proprietaire. Pour le reactiver, decommenter push.
 on:
-  push:
-    branches: [main]
+  # push:
+  #   branches: [main]
   workflow_dispatch:
 
 concurrency:
