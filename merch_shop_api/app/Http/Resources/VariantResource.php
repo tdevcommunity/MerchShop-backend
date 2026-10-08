@@ -82,6 +82,8 @@ final class VariantResource extends ApiResource
              */
             'size' => $variant->size,
             'color' => $variant->color,
+            'imageUrl' => $variant->image_url,
+            'colorHex' => $variant->color_hex,
 
             // Prix en francs CFA, entier : le franc CFA n'a pas de subdivision,
             // et un entier en JSON ne peut pas perdre de precision a l'aller-

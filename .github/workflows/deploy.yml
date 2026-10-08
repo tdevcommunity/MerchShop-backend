@@ -1,0 +1,59 @@
+# Deploiement continu sur le VPS (shop-api.ourtdev.com) a chaque push sur main.
+#
+# Aucun secret GitHub n'est necessaire :
+#  - l'image est poussee sur GHCR avec le GITHUB_TOKEN fourni par Actions ;
+#  - le VPS est declenche avec un jeton OIDC signe par GitHub, que le service
+#    de deploiement verifie (depot, branche main). Les secrets applicatifs
+#    restent sur le VPS.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  IMAGE: ghcr.io/tdevcommunity/merchshop-backend
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        run: |
+          docker buildx create --use --driver docker-container >/dev/null
+          docker buildx build -f merch_shop_api/Dockerfile.production \
+            --cache-from type=registry,ref=${{ env.IMAGE }}:buildcache \
+            --cache-to type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max \
+            -t ${{ env.IMAGE }}:main -t ${{ env.IMAGE }}:sha-${{ github.sha }} \
+            --push merch_shop_api
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deployment on the VPS
+        run: |
+          set -euo pipefail
+          token=$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://admin-hub.ourtdev.com" | jq -r .value)
+          echo "::add-mask::$token"
+          status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 \
+            -X POST -H "Authorization: Bearer $token" https://admin-hub.ourtdev.com/deploy)
+          cat response.json; echo
+          test "$status" = "200"
