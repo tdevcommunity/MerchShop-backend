@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['product_id', 'sku', 'name', 'size', 'color', 'price', 'stock', 'status'])]
+#[Fillable(['product_id', 'sku', 'name', 'size', 'color', 'image_url', 'color_hex', 'price', 'stock', 'status'])]
 #[RouteKey('uuid')]
 class Variant extends Model
 {

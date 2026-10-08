@@ -108,6 +108,18 @@ final class ProductController extends ApiController
             }
         }
 
+        if (isset($body['variants']) && is_array($body['variants'])) {
+            foreach ($body['variants'] as $i => $variantData) {
+                $fileKey = "variantImage[{$i}]";
+                if ($request->hasFile($fileKey)) {
+                    $uploaded = $this->cloudinary->upload($request->file($fileKey));
+                    if ($uploaded !== null) {
+                        $body['variants'][$i]['image_url'] = $uploaded;
+                    }
+                }
+            }
+        }
+
         $product = $this->products->create($body);
 
         return $this->jsonResource(ProductResource::make($product), Response::HTTP_CREATED);
@@ -128,6 +140,18 @@ final class ProductController extends ApiController
             }
             // Si upload échoue ET qu'aucune image_url n'est fournie dans le body,
             // on ne touche pas à la photo existante du produit.
+        }
+
+        if (isset($body['variants']) && is_array($body['variants'])) {
+            foreach ($body['variants'] as $i => $variantData) {
+                $fileKey = "variantImage[{$i}]";
+                if ($request->hasFile($fileKey)) {
+                    $uploaded = $this->cloudinary->upload($request->file($fileKey));
+                    if ($uploaded !== null) {
+                        $body['variants'][$i]['image_url'] = $uploaded;
+                    }
+                }
+            }
         }
 
         return ProductResource::make($this->products->update($product, $body));
