@@ -116,11 +116,11 @@ final class ProductService
      * declinaises vendables n'a aucun interet pour la boutique, et mieux vaut
      * que l'echec porte sur l'ensemble.
      *
-     * @param  array{name: string, description?: string|null, image_url?: string|null, category_id: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>, default_variant?: array<string, mixed>|null}  $data
+     * @param  array{name: string, description?: string|null, image_url?: string|null, category_id?: int, category_uuid?: string, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>, default_variant?: array<string, mixed>|null}  $data
      */
     public function create(array $data): Product
     {
-        $category = $this->resolveCategory((int) $data['category_id']);
+        $category = $this->resolveTargetCategory($data);
 
         return DB::transaction(function () use ($data, $category): Product {
             $product = $this->products->create([
@@ -194,7 +194,7 @@ final class ProductService
      * mise a jour partielle d'un produit, et la redefinition complete de ses
      * declinaisons depuis un seul appel.
      *
-     * @param  array{name?: string, description?: string|null, image_url?: string|null, category_id?: int, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>}  $data
+     * @param  array{name?: string, description?: string|null, image_url?: string|null, category_id?: int, category_uuid?: string, slug?: string|null, status?: CatalogStatus, variants?: array<int, array<string, mixed>>}  $data
      */
     public function update(Product $product, array $data): Product
     {
@@ -223,8 +223,15 @@ final class ProductService
                 $attributes['status'] = $data['status'];
             }
 
-            if (array_key_exists('category_id', $data)) {
-                $attributes['category_id'] = $this->resolveCategory((int) $data['category_id'])->id;
+            /*
+             * Les deux façons de désigner une catégorie aboutissent ici à la
+             * même colonne : `category_id` prime, `category_uuid` sert aux
+             * clients qui ne connaissent que l'uuid exposé par la ressource.
+             * La validation a déjà écarté une valeur nulle ou inconnue des
+             * deux côtés.
+             */
+            if (array_key_exists('category_id', $data) || array_key_exists('category_uuid', $data)) {
+                $attributes['category_id'] = $this->resolveTargetCategory($data)->id;
             }
 
             if (array_key_exists('slug', $data) && $data['slug'] !== null) {
@@ -492,18 +499,58 @@ final class ProductService
     }
 
     /**
+     * La categorie visee par un payload, dans l'une ou l'autre de ses formes.
+     *
+     * `category_id` prime parce qu'il s'agit de la colonne stockee et du
+     * contrat historique de l'API ; `category_uuid` sert les clients qui ne
+     * connaissent que l'uuid expose par `CategoryResource`, et c'est le cas du
+     * back-office, qui n'a jamais recu d'identifiant numerique. Les deux
+     * chemins convergent vers la meme garde, donc vers les memes refus.
+     *
+     * @param  array{category_id?: int|string|null, category_uuid?: string|null}  $data
+     */
+    private function resolveTargetCategory(array $data): Category
+    {
+        if (isset($data['category_id'])) {
+            return $this->resolveCategory((int) $data['category_id']);
+        }
+
+        return $this->resolveCategoryByUuid((string) ($data['category_uuid'] ?? ''));
+    }
+
+    /**
      * Verifie que la categorie existe et peut recevoir des produits.
      */
     private function resolveCategory(int $categoryId): Category
     {
         // Cle primaire et non cle de route : `category_id` est la colonne
         // reellement stockee, validee par `exists` sur la table `categories`.
-        $category = $this->categories->findById($categoryId);
+        return $this->guardActive($this->categories->findById($categoryId));
+    }
 
-        // Une categorie supprimee logiquement ou masquee n'est pas une cible
-        // valide : y ranger un produit le rendrait invisible du catalogue
-        // public, ce qui est le plus souvent une faute de saisie qu'on ne
-        // veut pas rendre definitive.
+    /**
+     * Meme verification, par la cle de route.
+     *
+     * `findForManagement` resout par uuid — la forme exposee par la ressource —
+     * et rend la categorie quel que soit son statut : la decision revient donc
+     * a `guardActive`, une seule et meme regle pour les deux chemins, au lieu
+     * d'etre partagee entre le filtrage d'une methode de lecture et le service.
+     */
+    private function resolveCategoryByUuid(string $uuid): Category
+    {
+        return $this->guardActive($this->categories->findForManagement($uuid));
+    }
+
+    /**
+     * Une categorie lue doit etre active pour designer un produit.
+     *
+     * Une categorie supprimee logiquement ou masquee n'est pas une cible
+     * valide : y ranger un produit le rendrait invisible du catalogue
+     * public, ce qui est le plus souvent une faute de saisie qu'on ne
+     * veut pas rendre definitive.
+     */
+    private function guardActive(?Category $category): Category
+    {
         if ($category === null || $category->status !== CatalogStatus::ACTIVE) {
             throw new ApiException('Categorie introuvable.', 404, 'CATEGORY_NOT_FOUND');
         }
