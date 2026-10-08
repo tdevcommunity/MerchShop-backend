@@ -32,6 +32,7 @@ final class CategoryResource extends ApiResource
         $category = $this->resource;
 
         return [
+            'id' => (string) $category->id,
             'uuid' => $category->uuid,
             'name' => $category->name,
             'description' => $category->description,
