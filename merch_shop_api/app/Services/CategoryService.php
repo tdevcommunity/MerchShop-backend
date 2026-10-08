@@ -36,7 +36,7 @@ final class CategoryService
      */
     public function listCatalog(int $perPage): LengthAwarePaginator
     {
-        return $this->categories->paginateForCatalog($perPage, CatalogStatus::ACTIVE);
+        return $this->categories->paginateForCatalog($perPage);
     }
 
     public function findOrFail(string $uuid): Category
