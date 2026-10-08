@@ -175,6 +175,8 @@ final class ProductService
             'status' => $default['status'] ?? $product->status,
             'size' => $default['size'] ?? null,
             'color' => $default['color'] ?? null,
+            'image_url' => $default['image_url'] ?? null,
+            'color_hex' => $default['color_hex'] ?? null,
         ];
     }
 
@@ -327,6 +329,8 @@ final class ProductService
                  */
                 'size' => $variantData['size'] ?? null,
                 'color' => $variantData['color'] ?? null,
+                'image_url' => $variantData['image_url'] ?? null,
+                'color_hex' => $variantData['color_hex'] ?? null,
 
                 'price' => $this->priceAsAmount($variantData['price']),
                 'stock' => $variantData['stock'],
