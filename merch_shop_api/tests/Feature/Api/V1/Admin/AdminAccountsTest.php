@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -148,6 +149,125 @@ class AdminAccountsTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // Ce que l'invitation genere, et ce qu'elle demande.
+    // ---------------------------------------------------------------------
+
+    public function test_it_generates_a_temporary_password_that_opens_the_account(): void
+    {
+        /*
+         * Le formulaire d'invitation n'a pas de champ mot de passe : c'est le
+         * serveur qui en produit un, et la reponse est le seul endroit ou il
+         * apparait en clair. Le test verifie donc les deux moities du contrat a
+         * la fois — la valeur est bien renvoyee, et elle ouvre bien le compte.
+         */
+        $payload = $this->invite(['email' => 'guichet@merchshop.test']);
+        unset($payload['password']);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/v1/admin/users', $payload)
+            ->assertCreated();
+
+        $temporary = $response->json('temporaryPassword');
+
+        $this->assertIsString($temporary, 'La reponse doit porter le mot de passe a transmettre.');
+
+        /*
+         * La forme, et pas seulement l'existence : un mot de passe genere qui
+         * ne respecterait pas les regles imposees au saisi laisserait un compte
+         * ouvert par un mot de passe que le meme formulaire aurait refuse.
+         */
+        $this->assertGreaterThanOrEqual(10, strlen($temporary));
+        $this->assertMatchesRegularExpression('/^(?=.*[a-z])(?=.*[0-9])/', $temporary);
+
+        $created = User::query()->where('email', 'guichet@merchshop.test')->sole();
+
+        $this->assertTrue(
+            Hash::check($temporary, $created->password),
+            'Le mot de passe affiche une fois doit etre celui qui ouvre le compte.',
+        );
+    }
+
+    public function test_it_accepts_a_single_name_and_cuts_it_in_two(): void
+    {
+        /*
+         * L'ecran demande « Nom complet ». La coupe n'a pas a etre refaite dans
+         * chaque client : elle se fait ici, une fois, pour tous.
+         */
+        $payload = $this->invite(['name' => 'Ops Festival', 'email' => 'ops@merchshop.test']);
+        unset($payload['firstname'], $payload['lastname']);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson('/api/v1/admin/users', $payload)
+            ->assertCreated();
+
+        $this->assertSame('Ops', $response->json('data.firstname'));
+        $this->assertSame('Festival', $response->json('data.lastname'));
+        $this->assertSame('Ops Festival', $response->json('data.fullName'));
+    }
+
+    public function test_it_creates_an_account_without_a_phone_number(): void
+    {
+        /*
+         * Aucun ecran ne demande de numero a l'invitation. Exiger un telephone
+         * pousserait a en inventer un — un compte joignable a personne, et un
+         * risque de doublon sur un forfait reel dans une colonne unique.
+         */
+        $payload = $this->invite(['email' => 'sansnumero@merchshop.test', 'name' => 'Kossi Mensah']);
+        unset($payload['firstname'], $payload['lastname'], $payload['phone']);
+
+        $this->actingAs($this->admin)
+            ->postJson('/api/v1/admin/users', $payload)
+            ->assertCreated();
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'sansnumero@merchshop.test',
+            'phone' => null,
+        ]);
+    }
+
+    public function test_it_still_requires_a_name_in_one_form_or_another(): void
+    {
+        /*
+         * La somme des deux formes n'est pas une absence de regle : sans nom du
+         * tout, le compte serait cree avec un prénom vide — present en base,
+         * invisible a l'ecran, et impossible a distinguer d'une erreur de
+         * rendu. C'est le champ, et non sa forme, qui est obligatoire.
+         */
+        $payload = $this->invite(['email' => 'sansnom@merchshop.test']);
+        unset($payload['firstname'], $payload['lastname'], $payload['name']);
+
+        $this->actingAs($this->admin)
+            ->postJson('/api/v1/admin/users', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('error.details.fields.name', fn (array $messages): bool => $messages !== []);
+
+        $this->assertSame(1, User::query()->count());
+    }
+
+    public function test_a_password_reset_can_be_generated_too(): void
+    {
+        /*
+         * L'ecran « Nouveau MDP » n'a aucun champ de saisie : il appuie et
+         * affiche. Sans cette generation, l'action renverrait un 422 que
+         * l'utilisateur n'a aucune facon de comprendre, puisqu'il n'a rien
+         * oublie.
+         */
+        $staff = User::factory()->staff()->create();
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/api/v1/admin/users/{$staff->uuid}/reset-password")
+            ->assertOk();
+
+        $temporary = $response->json('temporaryPassword');
+
+        $this->assertIsString($temporary);
+        $this->assertTrue(
+            Hash::check($temporary, $staff->refresh()->password),
+            'Le mot de passe affiche doit ouvrir le compte apres la reinitialisation.',
+        );
+    }
+
+    // ---------------------------------------------------------------------
     // Ce que le mot de passe doit etre.
     // ---------------------------------------------------------------------
 
@@ -172,7 +292,7 @@ class AdminAccountsTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('weakPasswords')]
+    #[DataProvider('weakPasswords')]
     public function test_it_refuses_a_weak_password(string $password): void
     {
         $this->actingAs($this->admin)

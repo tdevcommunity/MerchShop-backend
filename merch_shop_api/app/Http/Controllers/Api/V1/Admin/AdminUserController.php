@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 /**
@@ -105,15 +106,26 @@ final class AdminUserController extends ApiController
     /**
      * Inviter un compte de guichet.
      *
-     * Le mot de passe est exige plutot que genere. Un mot de passe genere et
-     * envoye par courriel serait communique a un canal que le festival ne maitrise
-     * pas — la boite d'un guichetier personnel — et que personne ne garantit
-     * qu'il lira. Saisi au stand, il est connu de la personne qui le recoit et de
-     celle qui l'invite, et il est change au premier usage si l'on veut.
+     * Le mot de passe est, le plus souvent, genere ici et affiche une seule fois.
+     * Il n'est jamais envoye par courriel : une boite de guichetier est
+     * personnelle, hors du perimetre du festival, et personne ne garantit qu'il
+     * lira le message. Un mot de passe dicte au stand reste possible — le champ
+     * est accepte quand il est fourni — pour l'administrateur qui prefere le
+     * choisir avec la personne concernee.
+     *
+     * Le nom arrive en un seul champ depuis l'ecran d'invitation, qui demande
+     * « Nom complet » et non un prénom puis un nom. La coupe se fait ici, a
+     * l'endroit ou la regle est la meme pour tous les appelsants, plutot que
+     * dans chaque client.
      *
      * L'adresse est obligatoire et propre au role : un `customer` cree par cette
      * route n'aurait aucun back-office, et un `admin` sans adresse ne pourrait
      * plus etre retrouvee dans la liste des comptes.
+     *
+     * Le telephone, lui, est optionnel : aucun ecran ne le demande a
+     * l'invitation, et inventer un numero pour satisfaire une contrainte
+     * produirait un compte joignable a personne — avec, en prime, le risque
+     * d'un doublon sur un forfait reel. Il reste unique quand il est fourni.
      */
     public function store(Request $request): BackofficeUserResource
     {
@@ -122,12 +134,27 @@ final class AdminUserController extends ApiController
         $actor = $this->actor($request);
 
         $validated = $request->validate([
-            'firstname' => ['required', 'string', 'max:120'],
-            'lastname' => ['required', 'string', 'max:120'],
+            /*
+             * `required_without` et non `sometimes` : un champ absent doit
+             * pouvoir poser sa propre exigence. `sometimes` court-circuite
+             * toutes les autres regles des le champ absent, et le nom n'aurait
+             * jamais ete demande — ni sous cette forme, ni sous l'autre.
+             */
+            'name' => ['required_without:firstname', 'string', 'min:2', 'max:241', 'regex:/\S/'],
+            'firstname' => ['required_without:name', 'string', 'max:120'],
+            'lastname' => ['sometimes', 'string', 'max:120'],
             'email' => ['required', 'email:rfc', 'max:180', 'unique:users,email'],
-            'phone' => ['required', 'string', new PhoneNumber, 'unique:users,phone'],
+            'phone' => ['nullable', 'string', new PhoneNumber, 'unique:users,phone'],
             'role' => ['required', Rule::enum(UserRole::class), Rule::in([UserRole::ADMIN->value, UserRole::STAFF->value])],
-            'password' => $this->passwordRules(),
+
+            /*
+             * `sometimes` remplace le `required` de la regle de fond : absent du
+             * payload, le champ n'est pas examine, et c'est le generateur qui
+             * prend le relais. Present — meme vide — il passe par toutes les
+             * regles ordinaires, donc un mot de passe faible est refuse ici
+             * exactement comme il l'aurait ete s'il avait ete saisi a la main.
+             */
+            'password' => ['sometimes', ...$this->passwordRules()],
         ], [
             'role.in' => 'Un compte de guichet est admin ou staff.',
             'email.unique' => 'Cette adresse est déjà celle d\'un compte.',
@@ -141,6 +168,16 @@ final class AdminUserController extends ApiController
             'phone.unique' => 'Ce numéro est déjà celui d\'un compte.',
         ]);
 
+        [$firstname, $lastname] = $this->splitName($validated);
+
+        /*
+         * Mot de passe fourni, on l'utilise ; absent, on en genere un qui tient
+         * les memes regles que s'il avait ete saisi a la main. La reponse le
+         * porte une seule fois, pour que l'administrateur le transmette hors de
+         * l'application — c'est le seul endroit ou il est écrit en clair.
+         */
+        $password = $validated['password'] ?? $this->generateTemporaryPassword();
+
         /*
          * Le compte est cree actif.
          *
@@ -148,21 +185,21 @@ final class AdminUserController extends ApiController
          * qui ne connait pas encore le mot de passe. Inviter quelqu'un qui doit
          * encore etre active est un etat transitoire qu'aucun guichetier n'a de
          * raison de creer : il cree un compte que personne ne peut utiliser et que
-         * quelqu'un forgetting d'activer.
+         * quelqu'un oubliant d'activer.
          */
         $user = User::query()->create([
-            'firstname' => $validated['firstname'],
-            'lastname' => $validated['lastname'],
+            'firstname' => $firstname,
+            'lastname' => $lastname,
             'email' => $validated['email'],
-            'phone' => $validated['phone'],
+            'phone' => $validated['phone'] ?? null,
             'role' => UserRole::from($validated['role']),
             'status' => UserStatus::ACTIVE,
-            'password' => $validated['password'],
+            'password' => $password,
         ]);
 
         $this->audit->created(AuditAction::USER_CREATED, $user, $actor);
 
-        return BackofficeUserResource::make($user);
+        return BackofficeUserResource::make($user)->additional(['temporaryPassword' => $password]);
     }
 
     /**
@@ -187,6 +224,11 @@ final class AdminUserController extends ApiController
         $user = $this->findOrFail($uuid);
 
         $validated = $request->validate([
+            /* `name` est la meme coupe que cote invitation : un seul champ, dont
+             * la separation se fait ici. Il est alternatif a `firstname`, jamais
+             * cumulatif avec lui — un patch qui n'envoie ni l'un ni l'autre ne
+             * touche pas au nom, puisque chaque champ est `sometimes`. */
+            'name' => ['sometimes', 'string', 'min:2', 'max:241', 'regex:/\S/'],
             'firstname' => ['sometimes', 'required', 'string', 'max:120'],
             'lastname' => ['sometimes', 'required', 'string', 'max:120'],
 
@@ -215,6 +257,10 @@ final class AdminUserController extends ApiController
          * `staff`, et ce compte deviendrait client.
          */
         $changes = array_intersect_key($validated, array_flip(['firstname', 'lastname', 'email', 'phone']));
+
+        if (isset($validated['name'])) {
+            [$changes['firstname'], $changes['lastname']] = $this->splitName($validated);
+        }
 
         if (array_key_exists('role', $validated)) {
             $changes['role'] = UserRole::from($validated['role']);
@@ -286,14 +332,74 @@ final class AdminUserController extends ApiController
         $user = $this->findOrFail($uuid);
 
         $validated = $request->validate([
-            'password' => $this->passwordRules(),
+            /*
+             * Le mot de passe est, lui aussi, optionnel ici : absent, il est
+             * genere et renvoye une seule fois, comme a l'invitation. C'est ce
+             * que demande l'ecran « Nouveau MDP », qui n'a aucun champ de saisie
+             * et affiche le resultat au guichetier.
+             */
+            'password' => ['sometimes', ...$this->passwordRules()],
         ]);
 
-        $user->update(['password' => Hash::make($validated['password'])]);
+        $password = $validated['password'] ?? $this->generateTemporaryPassword();
+
+        $user->update(['password' => Hash::make($password)]);
 
         $this->audit->record(AuditAction::USER_PASSWORD_RESET, $user, $actor);
 
-        return BackofficeUserResource::make($user->refresh());
+        return BackofficeUserResource::make($user->refresh())->additional(['temporaryPassword' => $password]);
+    }
+
+    /**
+     * Le prénom et le nom, venus soit de deux champs, soit d'un seul.
+     *
+     * Quand c'est un seul — le cas de l'ecran d'invitation, qui demande « Nom
+     * complet » — le premier espace fait la coupe : « Ops Festival » donne
+     * « Ops » puis « Festival », et un nom seul donne le prénom avec un nom
+     * vide, que `fullName()` se charge d'ecarter.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{0: string, 1: string}
+     */
+    private function splitName(array $validated): array
+    {
+        if (isset($validated['firstname'])) {
+            return [$validated['firstname'], $validated['lastname'] ?? ''];
+        }
+
+        $parts = preg_split('/\s+/u', trim((string) ($validated['name'] ?? '')), 2) ?: [''];
+
+        return [$parts[0], $parts[1] ?? ''];
+    }
+
+    /**
+     * Un mot de passe temporaire qui tient les regles de `passwordRules()`.
+     *
+     * Deux mots courants en minuscules suivis de quatre chiffres : la forme
+     * meme que la liste interdite prescrit — dicible au stand, dictable par
+     * telephone, sans symbole a prononcer mal. Le candidat est passe par les
+     * regles ordinaires plutot que suppose correct : la meme regle juge le
+     * saisi et le genere, donc il ne peut pas y avoir deux verdicts.
+     */
+    private function generateTemporaryPassword(): string
+    {
+        $words = ['guichet', 'tente', 'badge', 'etendard', 'caravane', 'tambour', 'kente', 'akawa'];
+
+        for ($attempt = 0; $attempt < 50; $attempt++) {
+            $candidate = $words[array_rand($words)].$words[array_rand($words)].random_int(1000, 9999);
+
+            if (! Validator::make(['password' => $candidate], ['password' => $this->passwordRules()])->fails()) {
+                return $candidate;
+            }
+        }
+
+        /*
+         * Atteint uniquement si les regles changent au point de refuser la
+         * forme ci-dessus. Le recours reste dans la forme autorisee — lettres
+         * minuscules et chiffres, plus de dix caracteres — plutot que de
+         * rendre un compte inaccessible.
+         */
+        return 'stand'.random_int(100000, 999999);
     }
 
     /**
