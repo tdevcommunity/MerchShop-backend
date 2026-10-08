@@ -375,6 +375,76 @@ class ProductTest extends TestCase
             ->assertJsonStructure(['error' => ['details' => ['fields' => ['category_id']]]]);
     }
 
+    public function test_creation_accepts_a_category_uuid(): void
+    {
+        // Forme envoyee par le back-office : `CategoryResource` n'expose que
+        // l'uuid, jamais la cle primaire.
+        $category = Category::factory()->create(['name' => 'Accessoires']);
+        $payload = $this->validProduct(['category_uuid' => $category->uuid]);
+        unset($payload['category_id']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->postJson('/api/v1/products', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.category.name', 'Accessoires');
+    }
+
+    public function test_creation_requires_a_category_identifier(): void
+    {
+        // Aucun des deux identifiants : l'erreur porte sur `category_id`, le
+        // champ canonique, comme avant l'ajout de `category_uuid`.
+        $payload = $this->validProduct();
+        unset($payload['category_id']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->postJson('/api/v1/products', $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure(['error' => ['details' => ['fields' => ['category_id']]]]);
+
+        $this->assertDatabaseCount('products', 0);
+    }
+
+    public function test_creation_rejects_an_unknown_category_uuid(): void
+    {
+        $payload = $this->validProduct([
+            'category_uuid' => '00000000-0000-0000-0000-000000000000',
+        ]);
+        unset($payload['category_id']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->postJson('/api/v1/products', $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure(['error' => ['details' => ['fields' => ['category_uuid']]]]);
+    }
+
+    public function test_creation_rejects_a_logically_deleted_category_uuid(): void
+    {
+        $category = Category::factory()->create();
+        $category->delete();
+
+        $payload = $this->validProduct(['category_uuid' => $category->uuid]);
+        unset($payload['category_id']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->postJson('/api/v1/products', $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure(['error' => ['details' => ['fields' => ['category_uuid']]]]);
+    }
+
+    public function test_creation_refuses_an_inactive_category_by_uuid(): void
+    {
+        // La ligne passe la validation `exists` : c'est le service qui refuse,
+        // avec le meme 404 que par cle primaire.
+        $category = Category::factory()->inactive()->create();
+        $payload = $this->validProduct(['category_uuid' => $category->uuid]);
+        unset($payload['category_id']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->postJson('/api/v1/products', $payload)
+            ->assertNotFound()
+            ->assertJsonPath('error.code', 'CATEGORY_NOT_FOUND');
+    }
+
     public function test_creation_rejects_a_negative_stock(): void
     {
         $this->actingAs(User::factory()->admin()->create())
@@ -548,6 +618,17 @@ class ProductTest extends TestCase
             ->putJson('/api/v1/products/'.$product->uuid, ['category_id' => $target->id])
             ->assertOk()
             ->assertJsonPath('data.category.name', 'Nouvel emplacement');
+    }
+
+    public function test_update_can_move_a_product_with_a_category_uuid(): void
+    {
+        $product = Product::factory()->create();
+        $target = Category::factory()->create(['name' => 'Cible par uuid']);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->putJson('/api/v1/products/'.$product->uuid, ['category_uuid' => $target->uuid])
+            ->assertOk()
+            ->assertJsonPath('data.category.name', 'Cible par uuid');
     }
 
     public function test_update_rejects_a_duplicate_explicit_slug(): void

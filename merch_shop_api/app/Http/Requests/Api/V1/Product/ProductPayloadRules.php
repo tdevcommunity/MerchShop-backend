@@ -71,12 +71,38 @@ trait ProductPayloadRules
             'image' => ['nullable', 'image', 'max:5120'],
 
             /**
+             * La catégorie est désignable par sa clé primaire ou par son uuid.
+             *
+             * Les deux formes coexistent parce qu'elles servent deux clients
+             * différents : `category_id` est la colonne réellement stockée et
+             * le contrat historique de l'API, `category_uuid` est la seule que
+             * `CategoryResource` expose — un client qui lit le catalogue sans
+             * accès à la base ne connaît rien d'autre, et c'est le cas du
+             * back-office, qui faute de recevoir d'identifiant enverrait
+             * aujourd'hui `NaN` serialisé en `null`.
+             *
+             * `required_without:category_uuid` à la création : il faut l'un
+             * des deux, et l'erreur porte sur `category_id` — le champ
+             * canonique — quand aucun n'est fourni, comme avant. En mise à
+             * jour les deux restent facultatifs.
+             *
              * `whereNull('deleted_at')` : une catégorie supprimée logiquement
              * n'est pas une destination valide, alors que la ligne existe
              * encore en base. Sans cette condition, la validation passerait et
              * le produit deviendrait invisible du catalogue public.
              */
-            'category_id' => [...$required('integer'), Rule::exists('categories', 'id')->whereNull('deleted_at')],
+            'category_id' => [
+                ...($partial ? ['sometimes', 'required'] : ['required_without:category_uuid']),
+                'integer',
+                Rule::exists('categories', 'id')->whereNull('deleted_at'),
+            ],
+
+            'category_uuid' => [
+                'sometimes',
+                'string',
+                'uuid',
+                Rule::exists('categories', 'uuid')->whereNull('deleted_at'),
+            ],
 
             'slug' => ['nullable', 'string', 'alpha_dash', 'max:200'],
 
@@ -241,6 +267,7 @@ trait ProductPayloadRules
             'image_url' => 'photo du produit',
             'image'     => 'photo du produit (fichier)',
             'category_id' => 'catégorie',
+            'category_uuid' => 'catégorie (uuid)',
             'slug' => 'slug',
             'status' => 'statut',
             'variants' => 'variantes',
