@@ -66,9 +66,18 @@ trait ProductPayloadRules
              * Prioritaire sur image_url : si ce champ est présent et que
              * l'upload réussit, image_url est écrasé avec le secure_url retourné
              * par Cloudinary. Si l'upload échoue, image_url est conservé.
-             * Max : 5 Mo (5120 Ko).
+             *
+             * Max : 20 Mo (20480 Ko), aligné sur upload_max_filesize PHP. La
+             * qualité photo produit dépasse souvent 5 Mo ; Cloudinary stocke
+             * l'original et le front demande une livraison f_auto/q_auto.
              */
-            'image' => ['nullable', 'image', 'max:5120'],
+            'image' => ['nullable', 'image', 'max:20480'],
+
+            /**
+             * Photos de variantes (une par index de variante), même plafond.
+             */
+            'variantImage' => ['sometimes', 'array'],
+            'variantImage.*' => ['nullable', 'image', 'max:20480'],
 
             /**
              * La catégorie est désignable par sa clé primaire ou par son uuid.
@@ -265,7 +274,9 @@ trait ProductPayloadRules
             'name' => 'nom',
             'description' => 'description',
             'image_url' => 'photo du produit',
-            'image'     => 'photo du produit (fichier)',
+            'image' => 'photo du produit (fichier)',
+            'variantImage' => 'photos des variantes',
+            'variantImage.*' => 'photo de variante (fichier)',
             'category_id' => 'catégorie',
             'category_uuid' => 'catégorie (uuid)',
             'slug' => 'slug',
