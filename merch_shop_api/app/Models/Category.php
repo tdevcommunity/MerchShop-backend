@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * @property int $products_count
  */
-#[Fillable(['name', 'description', 'slug', 'status'])]
+#[Fillable(['name', 'description', 'slug', 'status', 'sort_order'])]
 #[RouteKey('uuid')]
 class Category extends Model
 {
@@ -57,6 +57,7 @@ class Category extends Model
     {
         return [
             'status' => CatalogStatus::class,
+            'sort_order' => 'integer',
         ];
     }
 }

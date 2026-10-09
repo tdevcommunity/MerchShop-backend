@@ -38,6 +38,7 @@ final class CategoryResource extends ApiResource
             'description' => $category->description,
             'slug' => $category->slug,
             'status' => $category->status->value,
+            'sort_order' => $category->sort_order,
             'products_count' => $category->products_count,
             'created_at' => $category->created_at?->toIso8601String(),
             'updated_at' => $category->updated_at?->toIso8601String(),

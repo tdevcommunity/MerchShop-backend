@@ -88,7 +88,7 @@ final class CategoryService
     }
 
     /**
-     * @param  array{name?: string, description?: string|null, slug?: string|null, status?: CatalogStatus}  $data
+     * @param  array{name?: string, description?: string|null, slug?: string|null, status?: CatalogStatus, sort_order?: int}  $data
      */
     public function update(Category $category, array $data): Category
     {
@@ -104,6 +104,10 @@ final class CategoryService
 
         if (array_key_exists('status', $data)) {
             $attributes['status'] = $data['status'];
+        }
+
+        if (array_key_exists('sort_order', $data)) {
+            $attributes['sort_order'] = $data['sort_order'];
         }
 
         /*
