@@ -31,6 +31,7 @@ final class UpdateCategoryRequest extends ApiRequest
             'description' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'slug' => ['sometimes', 'nullable', 'string', 'alpha_dash', 'max:150'],
             'status' => ['sometimes', 'required', Rule::enum(CatalogStatus::class)],
+            'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:65535'],
         ];
     }
 
@@ -44,6 +45,7 @@ final class UpdateCategoryRequest extends ApiRequest
             'description' => 'description',
             'slug' => 'slug',
             'status' => 'statut',
+            'sort_order' => 'ordre d’affichage',
         ];
     }
 }
