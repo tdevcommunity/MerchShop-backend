@@ -87,6 +87,49 @@ class FedapayGatewayTest extends TestCase
         $this->assertSame($order->order_number, $call['params']['custom_metadata']['order_number']);
     }
 
+    public function test_it_sends_the_payment_mode_to_fedapay(): void
+    {
+        $client = $this->fakeClient();
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+
+        $this->gateway()->initiate($payment, 'https://boutique.exemple.test/retour');
+
+        $call = $client->lastCallTo('#^/v\d+/transactions$#');
+
+        /*
+         * Le mode de paiement est transmis pour que FedaPay affiche l'interface
+         * appropriee (carte bancaire ou mobile money).
+         */
+        $this->assertArrayHasKey('mode', $call['params']);
+        $this->assertContains($call['params']['mode'], ['card', 'mobile_money']);
+    }
+
+    public function test_it_sends_card_mode_when_payment_method_is_card(): void
+    {
+        $client = $this->fakeClient();
+        $variant = Variant::factory()->withStock(20)->create(['price' => '2500']);
+
+        $order = app(OrderService::class)->create([
+            'user' => User::factory()->create(),
+            'items' => [['uuid' => $variant->uuid, 'quantity' => 1]],
+            'fulfillment_method' => 'pickup',
+            'shipping_address' => null,
+            'payment_method' => 'card',
+            'customer_name' => 'Awa Diallo',
+            'customer_phone_number' => '90123456',
+            'participant_id' => null,
+        ]);
+
+        $payment = $order->payments()->firstOrFail();
+
+        $this->gateway()->initiate($payment, 'https://boutique.exemple.test/retour');
+
+        $call = $client->lastCallTo('#^/v\d+/transactions$#');
+
+        $this->assertSame('card', $call['params']['mode']);
+    }
+
     public function test_it_sends_nothing_that_the_client_chose(): void
     {
         /*
