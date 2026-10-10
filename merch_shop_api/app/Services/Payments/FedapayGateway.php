@@ -76,6 +76,16 @@ final class FedapayGateway implements PaymentGateway
                 'customer' => ['id' => $customerId],
 
                 /*
+                 * Mode de paiement choisi par l'acheteur.
+                 *
+                 * FedaPay affiche une interface adaptee selon ce mode : pour
+                 * carte bancaire, il montre les champs de carte ; pour mobile
+                 * money, il montre le choix de l'operateur. Sans cette information,
+                 * il affiche toujours l'interface par defaut (mobile money).
+                 */
+                'mode' => $payment->method->value === 'card' ? 'card' : 'mobile_money',
+
+                /*
                  * Reference marchande, choisie par nous.
                  *
                  * FedaPay genere sa propre reference et la rend immuable, mais il

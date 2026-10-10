@@ -957,7 +957,13 @@ final class OrderService
      */
     private function isOrderNumberConflict(QueryException $exception): bool
     {
-        return str_contains($exception->getMessage(), 'order_number');
+        $message = strtolower($exception->getMessage());
+
+        $isUniqueViolation = str_contains($message, 'unique')
+            || str_contains($message, 'duplicate')
+            || (string) $exception->getCode() === '23505';
+
+        return $isUniqueViolation && str_contains($message, 'order_number');
     }
 
     /**
