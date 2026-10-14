@@ -14,6 +14,7 @@ use App\Services\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\UploadedFile;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -108,17 +109,7 @@ final class ProductController extends ApiController
             }
         }
 
-        if (isset($body['variants']) && is_array($body['variants'])) {
-            foreach ($body['variants'] as $i => $variantData) {
-                $fileKey = "variantImage[{$i}]";
-                if ($request->hasFile($fileKey)) {
-                    $uploaded = $this->cloudinary->upload($request->file($fileKey));
-                    if ($uploaded !== null) {
-                        $body['variants'][$i]['image_url'] = $uploaded;
-                    }
-                }
-            }
-        }
+        $body = $this->attachVariantImages($request, $body);
 
         $product = $this->products->create($body);
 
@@ -142,17 +133,7 @@ final class ProductController extends ApiController
             // on ne touche pas à la photo existante du produit.
         }
 
-        if (isset($body['variants']) && is_array($body['variants'])) {
-            foreach ($body['variants'] as $i => $variantData) {
-                $fileKey = "variantImage[{$i}]";
-                if ($request->hasFile($fileKey)) {
-                    $uploaded = $this->cloudinary->upload($request->file($fileKey));
-                    if ($uploaded !== null) {
-                        $body['variants'][$i]['image_url'] = $uploaded;
-                    }
-                }
-            }
-        }
+        $body = $this->attachVariantImages($request, $body);
 
         return ProductResource::make($this->products->update($product, $body));
     }
@@ -170,6 +151,39 @@ final class ProductController extends ApiController
                 'message' => 'Produit supprime.',
             ],
         ]);
+    }
+
+    /**
+     * Associe chaque photo de variante uploadée à sa ligne.
+     *
+     * Le formulaire envoie `variantImage[0]`. PHP range ce fichier sous
+     * `variantImage.0` : `hasFile('variantImage[0]')` ne le voit jamais, et
+     * l'URL Cloudinary n'est alors pas écrite.
+     *
+     * @param  array<string, mixed>  $body
+     * @return array<string, mixed>
+     */
+    private function attachVariantImages(Request $request, array $body): array
+    {
+        if (! isset($body['variants']) || ! is_array($body['variants'])) {
+            return $body;
+        }
+
+        foreach ($body['variants'] as $index => $variantData) {
+            $file = $request->file('variantImage.'.$index);
+
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
+
+            $uploaded = $this->cloudinary->upload($file);
+
+            if ($uploaded !== null) {
+                $body['variants'][$index]['image_url'] = $uploaded;
+            }
+        }
+
+        return $body;
     }
 
     /**
