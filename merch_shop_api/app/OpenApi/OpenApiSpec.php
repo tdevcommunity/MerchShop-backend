@@ -231,7 +231,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'currency', type: 'string', nullable: true, example: 'XOF'),
         new OA\Property(property: 'amount', type: 'string', example: '2500'),
         new OA\Property(property: 'method', type: 'string', enum: ['mobile_money', 'card']),
-        new OA\Property(property: 'provider', type: 'string', nullable: true, example: 'fedapay'),
+        new OA\Property(property: 'provider', type: 'string', nullable: true, example: 'velto'),
         new OA\Property(property: 'status', type: 'integer', enum: [1, 2, 3, 4], description: '1 pending, 2 success, 3 failed, 4 refunded.'),
         new OA\Property(property: 'transactionId', type: 'string', nullable: true),
         new OA\Property(property: 'checkoutUrl', type: 'string', format: 'uri', nullable: true),

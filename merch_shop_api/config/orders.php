@@ -42,6 +42,14 @@ return [
     'delivery_fee' => (int) env('ORDER_DELIVERY_FEE', 0),
 
     /*
+     * Domaine pour l'email technique Velto quand l'acheteur n'a pas saisi d'email.
+     */
+    'velto_guest_email_domain' => env(
+        'ORDER_VELTO_GUEST_EMAIL_DOMAIN',
+        'checkout.guest.ourtdev.com',
+    ),
+
+    /*
     |--------------------------------------------------------------------------
     | Numérotation des commandes
     |--------------------------------------------------------------------------
@@ -83,7 +91,17 @@ return [
     */
 
     'pickup' => [
-        'secret' => env('PICKUP_TOKEN_SECRET'),
+        /*
+         * En local/testing, APP_KEY sert de repli pour ne pas bloquer la
+         * confirmation de paiement (QR retrait) quand PICKUP_TOKEN_SECRET
+         * n'est pas encore renseigne. En production, le secret dedie reste
+         * obligatoire.
+         */
+        'secret' => env('PICKUP_TOKEN_SECRET') ?: (
+            in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+                ? (string) env('APP_KEY', '')
+                : ''
+        ),
     ],
 
     /*
@@ -121,6 +139,9 @@ return [
         ],
         'paygate' => [
             'secret' => env('PAYMENT_WEBHOOK_SECRET_PAYGATE'),
+        ],
+        'velto' => [
+            'secret' => env('PAYMENT_WEBHOOK_SECRET_VELTO', env('VELTO_SECRET_KEY')),
         ],
     ],
 

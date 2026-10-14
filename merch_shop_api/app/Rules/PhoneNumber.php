@@ -64,7 +64,9 @@ final class PhoneNumber implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if ($this->normalise($value) === null) {
+        $national = self::normalise($value);
+
+        if ($national === null) {
             $fail('Le numéro de téléphone n’est pas un numéro togolais valide.');
         }
     }

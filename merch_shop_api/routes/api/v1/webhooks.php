@@ -31,6 +31,7 @@ use App\Enums\PaymentProvider;
 use App\Http\Controllers\Api\V1\FedapayPayoutWebhookController;
 use App\Http\Controllers\Api\V1\FedapayWebhookController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
+use App\Http\Controllers\Api\V1\VeltoWebhookController;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -59,9 +60,11 @@ Route::prefix('payments/webhooks')
              * doit pas changer parce que la maniere de traiter la notification a
              * evolve.
              */
-            $controller = $provider === PaymentProvider::FEDAPAY
-                ? FedapayWebhookController::class
-                : PaymentWebhookController::class;
+            $controller = match ($provider) {
+                PaymentProvider::FEDAPAY => FedapayWebhookController::class,
+                PaymentProvider::VELTO => VeltoWebhookController::class,
+                default => PaymentWebhookController::class,
+            };
 
             Route::post('/'.$provider->value, [$controller, 'handle'])
                 ->defaults('provider', $provider->value)

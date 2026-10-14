@@ -59,6 +59,8 @@ final class StoreOrderRequest extends ApiRequest
              */
             'customer_name' => ['required', 'string', 'min:2', 'max:120'],
 
+            'customer_email' => ['nullable', 'email', 'max:255'],
+
             'customer_phone_number' => ['required', 'string', new PhoneNumber],
 
             /*

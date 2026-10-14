@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Api\ApiController;
 use App\Http\Requests\Api\V1\Order\StoreOrderRequest;
+use App\Http\Requests\Api\V1\Order\SyncPaymentReturnRequest;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\PaymentResource;
 use App\Http\Resources\RefundResource;
@@ -13,6 +14,7 @@ use App\Models\Order;
 use App\Services\OrderService;
 use App\Services\Payments\CheckoutService;
 use App\Services\Payments\RefundService;
+use App\Services\Payments\VeltoReturnSyncService;
 use App\Support\Orders\OrderAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,7 @@ final class OrderController extends ApiController
         private readonly OrderService $orders,
         private readonly CheckoutService $checkout,
         private readonly RefundService $refunds,
+        private readonly VeltoReturnSyncService $paymentReturnSync,
         private readonly OrderAccess $access,
     ) {}
 
@@ -136,6 +139,25 @@ final class OrderController extends ApiController
         $this->authorizeRead($request, $order);
 
         return PaymentResource::make($this->checkout->start($order)->load('order'));
+    }
+
+    /**
+     * Rattrape l'etat du paiement au retour navigateur (webhook absent en local).
+     */
+    public function syncPaymentReturn(
+        SyncPaymentReturnRequest $request,
+        string $uuid,
+    ): OrderResource {
+        $order = $this->orders->findOrFail($uuid);
+
+        $this->authorizeRead($request, $order);
+
+        return OrderResource::make(
+            $this->paymentReturnSync->sync(
+                $order,
+                $request->string('transaction_id')->toString(),
+            ),
+        );
     }
 
     /**

@@ -45,4 +45,23 @@ return [
         'environment' => env('FEDAPAY_ENVIRONMENT', 'sandbox'),
     ],
 
+    'velto' => [
+        'public_key' => env('VELTO_PUBLIC_KEY'),
+        'secret_key' => env('VELTO_SECRET_KEY'),
+        'base_url' => env('VELTO_BASE_URL', 'https://velto-gate.kiiako.io/v1'),
+        /*
+         * Origine envoyee a Velto (cle pk_*) : doit etre whiteliste dans
+         * Applications > Securite & Domaines. Par defaut APP_URL (API).
+         */
+        'web_origin' => env('VELTO_WEB_ORIGIN', env('APP_URL', 'http://localhost:8000')),
+        'default_withdrawal_operator' => env('VELTO_DEFAULT_WITHDRAWAL_OPERATOR', 'mtn_open'),
+        /*
+         * Pays par defaut sur le checkout MM heberge (ex. bj pour Momo Test sandbox).
+         * Sans numero : le contact togolais de la commande n'est pas envoye a Velto.
+         */
+        'checkout_phone_country' => env('VELTO_CHECKOUT_PHONE_COUNTRY', 'bj'),
+        'checkout_phone_country_in_sandbox_only' => env('VELTO_CHECKOUT_PHONE_COUNTRY_SANDBOX_ONLY', true),
+        'sandbox_unique_customer_email' => env('VELTO_SANDBOX_UNIQUE_CUSTOMER_EMAIL', false),
+    ],
+
 ];

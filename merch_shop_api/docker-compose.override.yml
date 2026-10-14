@@ -1,0 +1,7 @@
+# Pas d'exposition des ports DB/Redis sur l'hote (evite conflits avec services locaux).
+# L'API joint postgres/redis via le reseau Docker interne.
+services:
+  postgres:
+    ports: !reset []
+  redis:
+    ports: !reset []

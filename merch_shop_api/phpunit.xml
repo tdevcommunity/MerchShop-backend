@@ -34,5 +34,7 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="PICKUP_TOKEN_SECRET" value="jeton-de-test-uniquement"/>
         <env name="PAYMENT_WEBHOOK_SECRET_FEDAPAY" value="webhook-de-test-uniquement"/>
+        <env name="PAYMENT_WEBHOOK_SECRET_VELTO" value="webhook-de-test-uniquement"/>
+        <env name="VELTO_SECRET_KEY" value="sk_sandbox_test"/>
     </php>
 </phpunit>

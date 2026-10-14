@@ -115,4 +115,9 @@ final class PhoneNumberTest extends TestCase
     {
         $this->assertSame('tg', PhoneNumber::countryCode());
     }
+
+    public function test_it_accepts_any_eight_digit_togolese_national_for_contact(): void
+    {
+        $this->assertSame('64000061', PhoneNumber::normalise('64000061'));
+    }
 }

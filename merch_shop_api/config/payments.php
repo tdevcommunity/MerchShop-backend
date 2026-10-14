@@ -23,7 +23,7 @@ return [
     |
     */
 
-    'provider' => env('PAYMENT_PROVIDER', 'fedapay'),
+    'provider' => env('PAYMENT_PROVIDER', 'velto'),
 
     /*
     |--------------------------------------------------------------------------

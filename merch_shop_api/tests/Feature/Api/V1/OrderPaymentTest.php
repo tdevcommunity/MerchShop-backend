@@ -36,11 +36,12 @@ class OrderPaymentTest extends TestCase
         parent::setUp();
 
         config()->set('payments.return_url', 'https://boutique.exemple.test/retour');
+        config()->set('payments.provider', PaymentProvider::VELTO->value);
 
         $this->gateway = new FakePaymentGateway;
 
         $this->app->instance(PaymentGatewayRegistry::class, new PaymentGatewayRegistry([
-            PaymentProvider::FEDAPAY->value => FakePaymentGateway::class,
+            PaymentProvider::VELTO->value => FakePaymentGateway::class,
         ]));
 
         $this->app->instance(FakePaymentGateway::class, $this->gateway);
@@ -52,7 +53,7 @@ class OrderPaymentTest extends TestCase
 
         $this->actingAs($order->user)->postJson("/api/v1/orders/{$order->uuid}/payment")
             ->assertOk()
-            ->assertJsonPath('data.provider', 'fedapay')
+            ->assertJsonPath('data.provider', 'velto')
             ->assertJsonPath('data.checkoutUrl', 'https://paiement.exemple.test/1')
             ->assertJsonPath('data.transactionId', 'TXN-1')
             ->assertJsonPath('data.status', PaymentStatus::PENDING->value);
@@ -68,6 +69,16 @@ class OrderPaymentTest extends TestCase
 
         $this->assertCount(1, $this->gateway->initiations);
         $this->assertSame((string) $order->total, (string) $this->gateway->initiations[0]['amount']);
+    }
+
+    public function test_it_appends_order_id_to_the_payment_return_url(): void
+    {
+        $order = $this->pendingOrder($this->customer());
+
+        $this->actingAs($order->user)->postJson("/api/v1/orders/{$order->uuid}/payment")->assertOk();
+
+        $callback = $this->gateway->initiations[0]['callback_url'] ?? '';
+        $this->assertStringContainsString('orderId='.rawurlencode($order->uuid), $callback);
     }
 
     public function test_it_lets_a_guest_pay_with_the_token_it_received_at_creation(): void
