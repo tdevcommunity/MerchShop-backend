@@ -85,6 +85,11 @@ Route::post('/orders/{uuid}/payment', [OrderController::class, 'pay'])
     ->whereUuid('uuid')
     ->name('orders.pay');
 
+Route::post('/orders/{uuid}/payment/sync-return', [OrderController::class, 'syncPaymentReturn'])
+    ->middleware('throttle:payment')
+    ->whereUuid('uuid')
+    ->name('orders.payment.sync-return');
+
 /*
  | Guichet : file d'attente et lecture du QR.
  |

@@ -46,7 +46,7 @@ final class RefundServiceTest extends TestCase
          * Seul l'agregateur compte : le registre de depot est remplace par un
          * double dans chaque test, donc aucun appel FedaPay ne part d'ici.
          */
-        config()->set('payments.provider', PaymentProvider::FEDAPAY->value);
+        config()->set('payments.provider', PaymentProvider::VELTO->value);
     }
 
     /*
@@ -263,7 +263,7 @@ final class RefundServiceTest extends TestCase
         $this->app->instance(
             PayoutGatewayRegistry::class,
             new PayoutGatewayRegistry([
-                PaymentProvider::FEDAPAY->value => FakePayoutGateway::class,
+                PaymentProvider::VELTO->value => FakePayoutGateway::class,
             ]),
         );
 
@@ -277,8 +277,8 @@ final class RefundServiceTest extends TestCase
         $order->payments()->firstOrFail()->update([
             'status' => PaymentStatus::SUCCESS,
             'paid_at' => now(),
-            'provider' => PaymentProvider::FEDAPAY,
-            'transaction_id' => 'FEDAPAY-1',
+            'provider' => PaymentProvider::VELTO,
+            'transaction_id' => 'VELTO-1',
         ]);
 
         $order->update(['status' => OrderStatus::PAID]);

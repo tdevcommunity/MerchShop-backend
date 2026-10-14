@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 #[Fillable([
     'order_number',
     'customer_name',
+    'customer_email',
     'customer_phone_number',
     'customer_phone_country',
     'fedapay_customer_id',

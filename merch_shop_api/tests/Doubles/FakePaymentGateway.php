@@ -32,7 +32,7 @@ final class FakePaymentGateway implements PaymentGateway
 
     public function provider(): PaymentProvider
     {
-        return PaymentProvider::FEDAPAY;
+        return PaymentProvider::VELTO;
     }
 
     public function initiate(Payment $payment, string $callbackUrl): PaymentIntent

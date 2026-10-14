@@ -23,8 +23,8 @@ use App\Repositories\Eloquent\EloquentProductRepository;
 use App\Repositories\Eloquent\EloquentRefundRepository;
 use App\Repositories\Eloquent\EloquentUserRepository;
 use App\Repositories\Eloquent\EloquentVariantRepository;
-use App\Services\Payments\FedapayGateway;
-use App\Services\Payments\FedapayPayoutGateway;
+use App\Services\Payments\VeltoGateway;
+use App\Services\Payments\VeltoPayoutGateway;
 use App\Services\Payments\PaymentGatewayRegistry;
 use App\Services\Payments\PayoutGatewayRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -69,7 +69,7 @@ class AppServiceProvider extends ServiceProvider
          * integration qui n'existe pas.
          */
         $this->app->singleton(PaymentGatewayRegistry::class, fn (): PaymentGatewayRegistry => new PaymentGatewayRegistry([
-            PaymentProvider::FEDAPAY->value => FedapayGateway::class,
+            PaymentProvider::VELTO->value => VeltoGateway::class,
         ]));
 
         /*
@@ -81,7 +81,7 @@ class AppServiceProvider extends ServiceProvider
          * passerelle qui n'en assure que la moitie.
          */
         $this->app->singleton(PayoutGatewayRegistry::class, fn (): PayoutGatewayRegistry => new PayoutGatewayRegistry([
-            PaymentProvider::FEDAPAY->value => FedapayPayoutGateway::class,
+            PaymentProvider::VELTO->value => VeltoPayoutGateway::class,
         ]));
     }
 

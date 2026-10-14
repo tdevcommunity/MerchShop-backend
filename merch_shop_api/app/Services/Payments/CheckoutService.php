@@ -38,7 +38,7 @@ use Throwable;
 final class CheckoutService
 {
     /** Duree de validite du verrou : le temps d'un aller-retour a l'operateur. */
-    private const LOCK_SECONDS = 15;
+    private const LOCK_SECONDS = 45;
 
     /**
      * Attente maximale avant de dire que le paiement est deja en cours.
@@ -53,6 +53,7 @@ final class CheckoutService
         private readonly PaymentGatewayRegistry $gateways,
         private readonly Money $money,
         private readonly FedapayCustomerResolver $customers,
+        private readonly VeltoReturnSyncService $veltoReturnSync,
     ) {}
 
     /**
@@ -90,8 +91,17 @@ final class CheckoutService
          */
         $payment = $this->reusable($order, $gateway);
 
-        if ($payment?->checkout_url !== null) {
-            return $payment;
+        if ($payment->checkout_url !== null) {
+            $order = $this->veltoReturnSync->reconcileCheckoutSession($payment, $order);
+            $order->refresh();
+            $this->assertPayable($order);
+            $payment->refresh();
+
+            if ($payment->status === PaymentStatus::PENDING && $payment->checkout_url !== null) {
+                return $payment;
+            }
+
+            $payment = $this->reusable($order, $gateway);
         }
 
         $callbackUrl = config('payments.return_url');
@@ -104,6 +114,8 @@ final class CheckoutService
                 ['provider' => $gateway->provider()->value],
             );
         }
+
+        $callbackUrl = $this->returnUrlForOrder($callbackUrl, $order);
 
         /*
          * L'appel sortant se fait ici, en dehors de toute transaction : c'est la
@@ -255,5 +267,12 @@ final class CheckoutService
         $settled = $this->money->toAmount($this->payments->settledAmount($order));
 
         return max(0, $this->money->toAmount($order->total) - $settled);
+    }
+
+    private function returnUrlForOrder(string $base, Order $order): string
+    {
+        $separator = str_contains($base, '?') ? '&' : '?';
+
+        return $base.$separator.'orderId='.rawurlencode($order->uuid);
     }
 }

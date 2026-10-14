@@ -932,6 +932,7 @@ Réponse attendue : `200` avec un binaire PNG ; aucun JSON n'est renvoyé en tan
 
 | Méthode | Endpoint | Accès | Contrôleur | Fonction |
 |---|---|---|---|---|
+| POST | `/api/v1/payments/webhooks/velto` | Header `X-Velto-Signature` (HMAC SHA-256 du corps) | `VeltoWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/fedapay` | Signature FedaPay horodatée | `FedapayWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/kkiapay` | Signature opérateur | `PaymentWebhookController` | `handle` |
 | POST | `/api/v1/payments/webhooks/paygate` | Signature opérateur | `PaymentWebhookController` | `handle` |

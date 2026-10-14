@@ -6,11 +6,11 @@ use App\Enums\OrderStatus;
 use App\Enums\PickupStatus;
 use App\Exceptions\ApiException;
 use App\Models\Order;
+use Illuminate\Support\Facades\Log;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
-use RuntimeException;
 
 /**
  * QR Code de retrait au stand.
@@ -239,8 +239,12 @@ final class PickupQrCodeService
         $secret = (string) config('orders.pickup.secret');
 
         if ($secret === '') {
-            throw new RuntimeException(
-                'Le secret de retrait (PICKUP_TOKEN_SECRET) n\'est pas renseigne : impossible de generer un QR de retrait fiable.',
+            Log::error('PICKUP_TOKEN_SECRET manquant : confirmation de paiement bloquee pour le retrait au stand.');
+
+            throw new ApiException(
+                'Le retrait au stand n\'est pas configure. Contacte l\'equipe technique.',
+                503,
+                'PICKUP_NOT_CONFIGURED',
             );
         }
 

@@ -41,7 +41,7 @@ final class FakePayoutGateway implements PayoutGateway
 
     public function provider(): PaymentProvider
     {
-        return PaymentProvider::FEDAPAY;
+        return PaymentProvider::VELTO;
     }
 
     public function payOut(Order $order): PayoutResult

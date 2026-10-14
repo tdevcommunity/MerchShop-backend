@@ -195,6 +195,9 @@ final class OrderService
                  * de donnee exploitable.
                  */
                 'customer_name' => $data['customer_name'],
+                'customer_email' => isset($data['customer_email'])
+                    ? trim((string) $data['customer_email']) ?: null
+                    : null,
                 'customer_phone_number' => PhoneNumber::normalise($data['customer_phone_number']),
                 'customer_phone_country' => PhoneNumber::countryCode(),
                 'sub_total' => $subTotal,

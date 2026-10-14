@@ -15,6 +15,9 @@ enum PaymentProvider: string
     /** FedaPay. */
     case FEDAPAY = 'fedapay';
 
+    /** Velto (Kiiako). */
+    case VELTO = 'velto';
+
     /** KKiaPay. */
     case KKIAPAY = 'kkiapay';
 
