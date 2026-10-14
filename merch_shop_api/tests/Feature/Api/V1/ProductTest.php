@@ -8,7 +8,9 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -1096,5 +1098,49 @@ class ProductTest extends TestCase
             ->assertUnauthorized();
 
         $this->assertDatabaseHas('products', ['uuid' => $product->uuid, 'deleted_at' => null]);
+    }
+
+    public function test_variant_color_image_is_stored_from_multipart_file(): void
+    {
+        $url = 'https://res.cloudinary.com/demo/image/upload/noir.jpg';
+
+        config([
+            'cloudinary.cloud_name' => 'demo',
+            'cloudinary.api_key' => 'key',
+            'cloudinary.api_secret' => 'secret',
+        ]);
+
+        Http::fake([
+            'api.cloudinary.com/*' => Http::response(['secure_url' => $url], 200),
+        ]);
+
+        $category = Category::factory()->create();
+
+        $response = $this->actingAs(User::factory()->admin()->create())
+            ->post('/api/v1/products', [
+                'name' => 'T-shirt noir',
+                'description' => 'Coton',
+                'category_id' => $category->id,
+                'variants' => [
+                    [
+                        'sku' => 'TEE-NOIR-M',
+                        'name' => 'M / Noir',
+                        'color' => 'Noir',
+                        'price' => 5000,
+                        'stock' => 4,
+                    ],
+                ],
+                'variantImage' => [
+                    UploadedFile::fake()->image('noir.jpg'),
+                ],
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.variants.0.imageUrl', $url);
+
+        $this->assertDatabaseHas('product_variants', [
+            'sku' => 'TEE-NOIR-M',
+            'image_url' => $url,
+        ]);
     }
 }
