@@ -79,6 +79,7 @@ class AdminAccessTest extends TestCase
             'journal d.audit' => ['/api/v1/admin/audit'],
             'journal de stock' => ['/api/v1/admin/inventory/adjustments'],
             'comptes' => ['/api/v1/admin/users'],
+            'produits' => ['/api/v1/admin/products'],
         ];
     }
 

@@ -35,9 +35,9 @@ final class ProductController extends ApiController
      * Liste paginee du catalogue.
      *
      * Seuls les produits actifs sont visibles par defaut. Les filtres
-     * `category_id` et `search` servent a la navigation ; le filtre `status` est
-     * volontairement absent de l'API publique (voir ProductService::listCatalog,
-     * qui en refuse l'usage non admin).
+     * `category_id`, `category` (slug) et `search` servent a la navigation ; le
+     * filtre `status` est volontairement absent de l'API publique (voir
+     * ProductService::listCatalog, qui en refuse l'usage non admin).
      *
      * Les attributs de documentation sont portés par l'action et non par les
      * méthodes privées de filtre : la génération ne lit que l'action de route,
@@ -48,6 +48,7 @@ final class ProductController extends ApiController
         return ProductResource::collection(
             $this->products->listCatalog($this->perPage($request), [
                 'category_id' => $this->filterCategoryId($request),
+                'category' => $this->filterCategorySlug($request),
                 'search' => $this->filterSearch($request),
             ]),
         );
@@ -213,6 +214,39 @@ final class ProductController extends ApiController
         }
 
         return (int) $value;
+    }
+
+    /**
+     * Slug de categorie demande, ou null.
+     *
+     * Le front navigue par URL lisible (`/shop?category=<slug>`) : il connait
+     * le slug, pas la cle primaire. Filtrer ici evite de rapatrier tout le
+     * catalogue pour le reduire cote client — ce qui, au-dela d'une page de
+     * resultats, faisait apparaitre des categories vides.
+     *
+     * La forme du slug est celle du catalogue (`alpha_dash`, bornee a 150) :
+     * un slug valide en base ne peut pas etre plus long, donc une valeur hors
+     * de cette forme ne trouvera rien et est refusee comme filtre invalide
+     * plutot que transmise telle quelle a la base.
+     */
+    private function filterCategorySlug(Request $request): ?string
+    {
+        $value = $request->query('category');
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        if (! preg_match('/^[A-Za-z0-9_-]{1,150}$/', $value)) {
+            throw new ApiException(
+                'Le parametre category doit etre un slug valide.',
+                422,
+                'INVALID_FILTER',
+                ['filter' => 'category'],
+            );
+        }
+
+        return $value;
     }
 
     /**

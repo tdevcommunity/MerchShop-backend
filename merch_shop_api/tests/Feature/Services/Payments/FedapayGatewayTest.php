@@ -146,7 +146,7 @@ class FedapayGatewayTest extends TestCase
         $sent = $client->lastCallTo('#^/v\d+/transactions$#')['params'];
 
         $this->assertSame(
-            ['description', 'amount', 'currency', 'callback_url', 'customer', 'merchant_reference', 'custom_metadata'],
+            ['description', 'amount', 'currency', 'callback_url', 'customer', 'mode', 'merchant_reference', 'custom_metadata'],
             array_keys($sent)
         );
 
