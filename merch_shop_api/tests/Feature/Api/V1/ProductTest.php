@@ -107,6 +107,39 @@ class ProductTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
+    public function test_list_filters_by_category_slug(): void
+    {
+        $textile = Category::factory()->create(['slug' => 'textile']);
+        $accessoires = Category::factory()->create(['slug' => 'accessories']);
+
+        Product::factory()->count(2)->create(['category_id' => $textile->id]);
+        Product::factory()->create(['category_id' => $accessoires->id]);
+
+        // Le front navigue par slug (`/shop?category=textile`) : le filtre doit
+        // resoudre la categorie par cette forme, sans quoi il devrait rapatrier
+        // tout le catalogue pour le reduire cote client.
+        $this->getJson('/api/v1/products?category=textile')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.category.slug', 'textile');
+    }
+
+    public function test_list_category_slug_filter_excludes_unknown_slugs(): void
+    {
+        Product::factory()->count(2)->create();
+
+        $this->getJson('/api/v1/products?category=categorie-inexistante')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_list_rejects_a_malformed_category_slug_filter(): void
+    {
+        $this->getJson('/api/v1/products?category=slug%20avec%20espace')
+            ->assertUnprocessable()
+            ->assertJsonPath('error.code', 'INVALID_FILTER');
+    }
+
     public function test_list_filters_by_search(): void
     {
         Product::factory()->create(['name' => 'T-shirt TDEV Edition 2026']);

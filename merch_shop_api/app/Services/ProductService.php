@@ -43,7 +43,7 @@ final class ProductService
      * Un filtre de statut demande explicitement l'ADMIN : la liste publique ne
      * montre que l'ACTIVE, et un inactive n'a de sens que pour l'exploitation.
      *
-     * @param  array{status?: CatalogStatus|null, category_id?: int|null, search?: string|null}  $filters
+     * @param  array{status?: CatalogStatus|null, category_id?: int|null, category?: string|null, search?: string|null}  $filters
      * @return LengthAwarePaginator<int, Product>
      */
     public function listCatalog(int $perPage, array $filters = []): LengthAwarePaginator
@@ -51,7 +51,28 @@ final class ProductService
         return $this->products->paginateForCatalog($perPage, [
             'status' => $filters['status'] ?? null,
             'category_id' => $filters['category_id'] ?? null,
+            'category' => $filters['category'] ?? null,
             'search' => $filters['search'] ?? null,
+        ]);
+    }
+
+    /**
+     * Liste paginee de gestion, tous statuts confondus.
+     *
+     * C'est la lecture du back-office, pas celle du shop : elle montre les
+     * produits retires du catalogue autant que les publies, pour que la fiche
+     * d'un brouillon ou d'un archive reste ouvrable. Le catalogue public, lui,
+     * continue de passer par `listCatalog`.
+     *
+     * @param  array{q?: string|null, status?: int|null, category?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Product>
+     */
+    public function listForBackoffice(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        return $this->products->paginateForManagement($perPage, [
+            'q' => $filters['q'] ?? null,
+            'status' => $filters['status'] ?? null,
+            'category' => $filters['category'] ?? null,
         ]);
     }
 
