@@ -85,6 +85,28 @@ final class EloquentProductRepository extends EloquentRepository implements Prod
         return $query->paginate($perPage);
     }
 
+    public function paginateForManagement(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        /*
+         * Les variantes sont chargees sans la restriction de statut du
+         * catalogue : une declinaison masquee doit rester modifiable depuis sa
+         * fiche, sinon la retirer la rendrait impossible a remettre en vente.
+         *
+         * Le tri place les produits les plus recents en tete. C'est un ecran de
+         * travail, pas une vitrine : ce qu'on vient de creer ou de corriger est
+         * ce qu'on cherche a retrouver, et les 42 produits d'un catalogue ne se
+         * lisent pas de la meme facon qu'un rayon de douze articles.
+         */
+        $query = $this->query()
+            ->with(['category', 'variants'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $this->applyManagementFilters($query, $filters);
+
+        return $query->paginate($perPage);
+    }
+
     public function findBySlug(string $slug): ?Product
     {
         /*
@@ -165,6 +187,45 @@ final class EloquentProductRepository extends EloquentRepository implements Prod
             $query->where(function (Builder $query) use ($term): void {
                 $query->where('name', 'like', $term)
                     ->orWhere('description', 'like', $term);
+            });
+        }
+    }
+
+    /**
+     * Filtres de la liste de gestion.
+     *
+     * Le filtre `status` ne bascule pas sur « actif par defaut » quand il est
+     * absent, contrairement a `applyCatalogFilters` : l'ecran de gestion doit
+     * montrer brouillons et archives, donc « pas de filtre » veut dire « tous »
+     * et non « actifs seulement ».
+     *
+     * La recherche couvre le nom, le slug et le SKU des variantes, en
+     * `whereHas` pour le SKU : c'est la requete que fait un gestionnaire qui
+     * colle une reference produit. Chaque LIKE passe par un parametre lie et le
+     * terme est borne en longueur en amont, dans le controleur.
+     *
+     * @param  array{q?: string|null, status?: int|null, category?: string|null}  $filters
+     * @param  Builder<Product>  $query
+     */
+    private function applyManagementFilters(Builder $query, array $filters): void
+    {
+        $status = $filters['status'] ?? null;
+
+        if ($status !== null) {
+            $query->where('status', $status);
+        }
+
+        if (isset($filters['category']) && $filters['category'] !== null && $filters['category'] !== '') {
+            $query->whereHas('category', fn (Builder $query): Builder => $query->where('slug', $filters['category']));
+        }
+
+        if (isset($filters['q']) && $filters['q'] !== null && $filters['q'] !== '') {
+            $term = '%'.addcslashes((string) $filters['q'], '%_').'%';
+
+            $query->where(function (Builder $query) use ($term): void {
+                $query->where('name', 'like', $term)
+                    ->orWhere('slug', 'like', $term)
+                    ->orWhereHas('variants', fn (Builder $query): Builder => $query->where('sku', 'like', $term));
             });
         }
     }

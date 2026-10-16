@@ -56,6 +56,27 @@ interface ProductRepositoryInterface extends RepositoryInterface
      */
     public function paginateForCatalog(int $perPage, array $filters = []): LengthAwarePaginator;
 
+    /**
+     * Liste paginee pour le back-office, tous statuts confondus.
+     *
+     * Distincte de `paginateForCatalog` sur un point qui change tout : elle ne
+     * restreint pas au statut actif. Un ecran de gestion qui ne verrait que les
+     * produits publies ne pourrait ni rouvrir un brouillon, ni remettre en ligne
+     * un article archive — et le bouton « Publier » n'aurait rien a publier.
+     *
+     * Les variantes sont chargees sans filtre de statut, contrairement au
+     * catalogue : une declinaison masquee reste modifiable.
+     *
+     * `q` cherche dans le nom, le slug et le SKU des variantes, ce que le front
+     * appelle « rechercher un produit ou un SKU ». `status` filtre sur un statut
+     * precis (`CatalogStatus`), et son absence vaut « tous les statuts » — un
+     * `null` ici n'a donc pas le meme sens que dans le catalogue.
+     *
+     * @param  array{q?: string|null, status?: int|null, category?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Product>
+     */
+    public function paginateForManagement(int $perPage, array $filters = []): LengthAwarePaginator;
+
     public function findBySlug(string $slug): ?Product;
 
     /**

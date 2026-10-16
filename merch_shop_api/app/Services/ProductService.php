@@ -57,6 +57,26 @@ final class ProductService
     }
 
     /**
+     * Liste paginee de gestion, tous statuts confondus.
+     *
+     * C'est la lecture du back-office, pas celle du shop : elle montre les
+     * produits retires du catalogue autant que les publies, pour que la fiche
+     * d'un brouillon ou d'un archive reste ouvrable. Le catalogue public, lui,
+     * continue de passer par `listCatalog`.
+     *
+     * @param  array{q?: string|null, status?: int|null, category?: string|null}  $filters
+     * @return LengthAwarePaginator<int, Product>
+     */
+    public function listForBackoffice(int $perPage, array $filters = []): LengthAwarePaginator
+    {
+        return $this->products->paginateForManagement($perPage, [
+            'q' => $filters['q'] ?? null,
+            'status' => $filters['status'] ?? null,
+            'category' => $filters['category'] ?? null,
+        ]);
+    }
+
+    /**
      * Charge un produit avec ses variantes, pour la lecture publique.
      *
      * Un produit masque n'est pas resolvable : le catalogue le retire de la

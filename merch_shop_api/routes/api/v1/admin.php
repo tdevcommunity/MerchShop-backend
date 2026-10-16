@@ -42,6 +42,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminInventoryController;
 use App\Http\Controllers\Api\V1\Admin\AdminNotificationController;
 use App\Http\Controllers\Api\V1\Admin\AdminOrderController;
 use App\Http\Controllers\Api\V1\Admin\AdminPaymentController;
+use App\Http\Controllers\Api\V1\Admin\AdminProductController;
 use App\Http\Controllers\Api\V1\Admin\AdminSearchController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,21 @@ use Illuminate\Support\Facades\Route;
  | qui heriterait du groupe par construction.
  */
 Route::prefix('admin')->middleware('backoffice')->name('admin.')->group(function (): void {
+    /*
+     | Catalogue, vu du guichet.
+     |
+     | La lecture publique des produits ne rend que les articles actifs : un
+     | brouillon enregistre depuis ce meme back-office n'y figure pas. Ces deux
+     | routes servent donc la gestion — tous les statuts, y compris le produit
+     | qu'on vient de creer et qui n'est pas encore en ligne.
+     |
+     | Elles ne remplacent pas `/api/v1/products` : le shop continue de lire le
+     | catalogue public. La difference n'est pas une version d'API, c'est une
+     | question differente posee au meme modele.
+     */
+    Route::get('/products', [AdminProductController::class, 'index'])->name('products.index');
+    Route::get('/products/{uuid}', [AdminProductController::class, 'show'])->whereUuid('uuid')->name('products.show');
+
     /*
      | Commandes.
      |
