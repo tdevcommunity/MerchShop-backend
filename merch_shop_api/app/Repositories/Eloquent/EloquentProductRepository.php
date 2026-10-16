@@ -131,7 +131,11 @@ final class EloquentProductRepository extends EloquentRepository implements Prod
      * Isoles pour etre reutilises par la recherche d'un produit; chaque filtre
      * est un AND, donc ils se cumulent naturellement.
      *
-     * @param  array{status?: CatalogStatus|null, category_id?: int|null, search?: string|null}  $filters
+     * Le filtre `category` resout le slug de la categorie via une sous-requete
+     * `whereHas` : elle exclut naturellement les categories supprimees
+     * logiquement, sans avoir a joindre puis filtrer `deleted_at` a la main.
+     *
+     * @param  array{status?: CatalogStatus|null, category_id?: int|null, category?: string|null, search?: string|null}  $filters
      * @param  Builder<Product>  $query
      */
     private function applyCatalogFilters(Builder $query, array $filters): void
@@ -146,6 +150,10 @@ final class EloquentProductRepository extends EloquentRepository implements Prod
 
         if (isset($filters['category_id'])) {
             $query->where('category_id', $filters['category_id']);
+        }
+
+        if (isset($filters['category']) && $filters['category'] !== null && $filters['category'] !== '') {
+            $query->whereHas('category', fn (Builder $query): Builder => $query->where('slug', $filters['category']));
         }
 
         if (isset($filters['search']) && $filters['search'] !== null && $filters['search'] !== '') {

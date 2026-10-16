@@ -46,7 +46,12 @@ interface ProductRepositoryInterface extends RepositoryInterface
      * Les variantes sont toujours chargees en eager loading : le front doit
      * pouvoir afficher les declinaisons disponibles sans appel supplementaire.
      *
-     * @param  array{status?: CatalogStatus|null, category_id?: int|null, search?: string|null}  $filters
+     * `category` filtre par slug de categorie, l'identifiant lisible expose
+     * par l'API : c'est la forme que le front connait, puisqu'il navigue par
+     * URL `/shop?category=<slug>`. `category_id` reste accepte pour un appelant
+     * qui dispose de la cle primaire.
+     *
+     * @param  array{status?: CatalogStatus|null, category_id?: int|null, category?: string|null, search?: string|null}  $filters
      * @return LengthAwarePaginator<int, Product>
      */
     public function paginateForCatalog(int $perPage, array $filters = []): LengthAwarePaginator;

@@ -43,7 +43,7 @@ final class ProductService
      * Un filtre de statut demande explicitement l'ADMIN : la liste publique ne
      * montre que l'ACTIVE, et un inactive n'a de sens que pour l'exploitation.
      *
-     * @param  array{status?: CatalogStatus|null, category_id?: int|null, search?: string|null}  $filters
+     * @param  array{status?: CatalogStatus|null, category_id?: int|null, category?: string|null, search?: string|null}  $filters
      * @return LengthAwarePaginator<int, Product>
      */
     public function listCatalog(int $perPage, array $filters = []): LengthAwarePaginator
@@ -51,6 +51,7 @@ final class ProductService
         return $this->products->paginateForCatalog($perPage, [
             'status' => $filters['status'] ?? null,
             'category_id' => $filters['category_id'] ?? null,
+            'category' => $filters['category'] ?? null,
             'search' => $filters['search'] ?? null,
         ]);
     }

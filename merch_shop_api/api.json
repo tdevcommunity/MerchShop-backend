@@ -1248,6 +1248,14 @@
             }
           },
           {
+            "name": "category",
+            "in": "query",
+            "description": "Slug de la categorie",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "search",
             "in": "query",
             "schema": {

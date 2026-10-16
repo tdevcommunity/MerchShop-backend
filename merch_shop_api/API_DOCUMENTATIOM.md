@@ -490,6 +490,7 @@ Réponse attendue : `204` ou `200` selon la stratégie de suppression, avec éve
 
 - `per_page` : nombre d'éléments, borné par la configuration ;
 - `category_id` : entier positif ;
+- `category` : slug de catégorie (ex. `textile`), la forme utilisée par les URL du shop ;
 - `search` : recherche textuelle sur le nom du produit.
 
 Exemple de réponse attendue :
