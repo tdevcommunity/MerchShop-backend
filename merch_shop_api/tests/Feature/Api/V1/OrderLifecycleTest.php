@@ -171,17 +171,17 @@ class OrderLifecycleTest extends TestCase
         $this->assertNull($payment->refresh()->transaction_id);
     }
 
-    public function test_it_returns_the_stock_on_cancellation(): void
+    public function test_it_leaves_the_stock_unchanged_on_cancellation_before_payment(): void
     {
         $variant = Variant::factory()->withStock(10)->create();
         $order = $this->orderFor($variant, quantity: 4);
 
-        $this->assertSame(6, $variant->refresh()->stock);
+        $this->assertSame(10, $variant->refresh()->stock);
 
         $this->orders->cancel($order);
 
         $this->assertSame(OrderStatus::CANCELLED, $order->refresh()->status);
-        $this->assertSame(10, $variant->refresh()->stock, 'Le stock doit revenir.');
+        $this->assertSame(10, $variant->refresh()->stock, 'Sans encaissement, le rayon n\'a pas bouge.');
     }
 
     public function test_it_returns_the_stock_on_refund(): void

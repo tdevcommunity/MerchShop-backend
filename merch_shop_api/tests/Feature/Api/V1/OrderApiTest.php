@@ -37,7 +37,7 @@ class OrderApiTest extends TestCase
             ->assertJsonPath('data.items.0.quantity', 2)
             ->assertJsonPath('data.items.0.unitPrice', 2500);
 
-        $this->assertSame(3, $variant->refresh()->stock);
+        $this->assertSame(5, $variant->refresh()->stock, 'Le stock physique attend la confirmation du paiement.');
     }
 
     public function test_it_attaches_the_order_to_the_connected_account(): void

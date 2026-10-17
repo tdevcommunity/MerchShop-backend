@@ -40,7 +40,7 @@ class OrderCheckoutTest extends TestCase
         $this->money = app(Money::class);
     }
 
-    public function test_it_creates_an_order_and_reserves_the_stock(): void
+    public function test_it_leaves_the_physical_stock_untouched_until_payment(): void
     {
         $variant = Variant::factory()->withStock(10)->create(['price' => 2500]);
 
@@ -51,7 +51,30 @@ class OrderCheckoutTest extends TestCase
         $this->assertSame(OrderStatus::PENDING_PAYMENT, $order->status);
         $this->assertSame(PickupStatus::PENDING, $order->pickup_status);
 
-        $this->assertSame(7, $variant->refresh()->stock, 'Le stock doit etre decremente des la creation.');
+        $this->assertSame(10, $variant->refresh()->stock, 'Le stock physique ne bouge qu\'au reglement.');
+    }
+
+    public function test_it_decrements_the_stock_when_the_order_is_marked_paid(): void
+    {
+        $variant = Variant::factory()->withStock(10)->create(['price' => 2500]);
+
+        $order = $this->checkout($variant, quantity: 3);
+
+        $paid = $this->orders->markPaid($order);
+
+        $this->assertSame(OrderStatus::PAID, $paid->status);
+        $this->assertSame(7, $variant->refresh()->stock);
+    }
+
+    public function test_it_counts_pending_orders_when_checking_availability(): void
+    {
+        $variant = Variant::factory()->withStock(10)->create(['price' => 1000]);
+
+        $this->checkout($variant, quantity: 7);
+
+        $this->expectExceptionCode(409);
+
+        $this->checkout($variant, quantity: 4);
     }
 
     public function test_it_opens_a_pending_payment_for_the_order_total(): void
@@ -211,7 +234,7 @@ class OrderCheckoutTest extends TestCase
         $this->assertCount(1, $order->items, 'Deux lignes du meme article doivent en former une seule.');
         $this->assertSame(5, $order->items->first()->quantity);
         $this->assertSame(5000, $order->total);
-        $this->assertSame(5, $variant->refresh()->stock);
+        $this->assertSame(10, $variant->refresh()->stock, 'La fusion de lignes n\'ecrit pas le stock avant paiement.');
     }
 
     public function test_it_never_produces_a_total_that_does_not_balance(): void

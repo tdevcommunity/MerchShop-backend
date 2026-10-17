@@ -10,6 +10,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\PickupStatus;
 use App\Exceptions\ApiException;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\User;
 use App\Models\Variant;
 use App\Repositories\Contracts\OrderRepositoryInterface;
@@ -27,8 +28,8 @@ use Illuminate\Support\Str;
  * Regle metier des commandes.
  *
  * Porte les decisions qu'aucune autre couche ne peut prendre a sa place : le
- * moment ou le stock est reserve, la maniere dont les montants sont calcules, et
- * les transitions d'etat autorisees.
+ * moment ou le stock est engage puis consomme, la maniere dont les montants sont
+ * calcules, et les transitions d'etat autorisees.
  *
  * Deux invariants gobernent tout le reste :
  *
@@ -38,11 +39,10 @@ use Illuminate\Support\Str;
  *     Un montant recu du client ne serait pas seulement inexact, il serait
  *     falsifiable, ce que le plan de tracking interdit explicitement ;
  *
- *  2. le stock est reserve des la creation de la commande, dans la meme
- *     transaction que son enregistrement. Le decrementer a la confirmation du
- *     paiement laisserait la place a deux commandes payables pour un seul
- *     article : le stock reel ne serait alors verifie par personne, et la
- *     survente ne se decouvrirait qu'a la preparation des commandes.
+ *  2. le stock physique n'est decremente qu'au reglement confirme (`markPaid`).
+ *     A la creation, seules les commandes encore en attente de paiement engagent
+ *     logiquement les quantites : deux tunnels simultanes ne peuvent pas depasser
+ *     le stock affiche, sans retirer la marchandise du rayon avant l'encaissement.
  */
 final class OrderService
 {
@@ -126,7 +126,7 @@ final class OrderService
     ) {}
 
     /**
-     * Enregistre une commande, reserve le stock et ouvre la tentative de paiement.
+     * Enregistre une commande, engage le stock en attente de paiement et ouvre la tentative.
      *
      * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null, customer_name: string, customer_phone_number: string}  $data
      */
@@ -235,10 +235,6 @@ final class OrderService
                     : null,
                 'participant_id' => $data['participant_id'] ?? null,
             ]);
-
-            foreach ($lines as $line) {
-                $this->variants->restock($line['variant'], -$line['quantity']);
-            }
 
             $this->createItems($order, $lines);
 
@@ -403,17 +399,17 @@ final class OrderService
     }
 
     /**
-     * Annule une commande avant paiement et rend le stock.
+     * Annule une commande avant paiement.
      *
-     * Le stock n'est rendu que si la commande ne l'etait pas deja : une double
-     * annulation ne peut pas credited deux fois la variante.
+     * Le stock physique n'a pas ete touche tant que la commande n'est pas payee :
+     * l'annulation libere seulement l'engagement porte par le statut
+     * `pending_payment`, sans incrementer le rayon.
      */
     public function cancel(Order $order): Order
     {
         return DB::transaction(function () use ($order): Order {
             $this->assertCanTransition($order, OrderStatus::CANCELLED);
 
-            $this->releaseStock($order);
             $this->payments->forOrder($order)->each(function ($payment): void {
                 // Une tentative encore en attente est sans issue des lors que la
                 // commande est fermee : la laisser en attente ferait croire a un
@@ -448,7 +444,15 @@ final class OrderService
      */
     public function markPaid(Order $order): Order
     {
-        return $this->transition($order, OrderStatus::PAID);
+        return DB::transaction(function () use ($order): Order {
+            $this->assertCanTransition($order, OrderStatus::PAID);
+
+            $this->consumeStock($order);
+
+            $order->update(['status' => OrderStatus::PAID]);
+
+            return $this->reload($order);
+        });
     }
 
     /**
@@ -819,7 +823,10 @@ final class OrderService
 
     private function assertStockAvailable(Variant $variant, int $quantity): void
     {
-        if ($variant->stock < $quantity) {
+        $pending = $this->pendingQuantityForVariant($variant->id);
+        $available = $variant->stock - $pending;
+
+        if ($available < $quantity) {
             throw new ApiException(
                 'Stock insuffisant pour une des declinaisons demandees.',
                 409,
@@ -827,11 +834,77 @@ final class OrderService
                 [
                     'variants' => [[
                         'uuid' => $variant->uuid,
-                        'available' => $variant->stock,
+                        'available' => max(0, $available),
                         'requested' => $quantity,
                     ]],
                 ],
             );
+        }
+    }
+
+    /**
+     * Quantites deja engagees par des commandes en attente de paiement.
+     */
+    private function pendingQuantityForVariant(int $variantId, ?int $excludeOrderId = null): int
+    {
+        $query = OrderItem::query()
+            ->where('product_variant_id', $variantId)
+            ->whereHas('order', static fn ($builder) => $builder->where('status', OrderStatus::PENDING_PAYMENT));
+
+        if ($excludeOrderId !== null) {
+            $query->where('order_id', '!=', $excludeOrderId);
+        }
+
+        return (int) $query->sum('quantity');
+    }
+
+    /**
+     * Retire du stock physique les articles d'une commande qui vient d'etre payee.
+     */
+    private function consumeStock(Order $order): void
+    {
+        $items = $order->items()->with('variant')->get();
+
+        /** @var array<int, string> $uuids */
+        $uuids = $items
+            ->map(static fn (OrderItem $item): ?string => $item->variant?->uuid)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($uuids === []) {
+            return;
+        }
+
+        $locked = $this->variants->lockForSale($uuids)->keyBy('uuid');
+
+        foreach ($items as $item) {
+            $variant = $item->variant;
+
+            if ($variant === null) {
+                continue;
+            }
+
+            /** @var Variant|null $lockedVariant */
+            $lockedVariant = $locked->get($variant->uuid);
+
+            if ($lockedVariant === null || $lockedVariant->stock < $item->quantity) {
+                throw new ApiException(
+                    'Stock insuffisant pour finaliser le reglement de la commande.',
+                    409,
+                    'INSUFFICIENT_STOCK',
+                    [
+                        'variants' => [[
+                            'uuid' => $variant->uuid,
+                            'available' => $lockedVariant?->stock ?? 0,
+                            'requested' => $item->quantity,
+                        ]],
+                    ],
+                );
+            }
+
+            $this->variants->restock($lockedVariant, -$item->quantity);
         }
     }
 
