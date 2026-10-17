@@ -152,11 +152,11 @@ final class OrderController extends ApiController
 
         $this->authorizeRead($request, $order);
 
+        $transactionId = $request->input('transaction_id');
+        $transactionId = is_string($transactionId) ? trim($transactionId) : null;
+
         return OrderResource::make(
-            $this->paymentReturnSync->sync(
-                $order,
-                $request->string('transaction_id')->toString(),
-            ),
+            $this->paymentReturnSync->syncFromReturn($order, $transactionId),
         );
     }
 

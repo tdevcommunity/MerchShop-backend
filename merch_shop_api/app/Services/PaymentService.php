@@ -193,8 +193,23 @@ final class PaymentService
          * Le droit de retrait n'est ouvert qu'ici, une fois l'argent encaisse.
          * L'octroi est idempotent, donc un rejeu de la notification le reaffecte
          * sans changer la valeur : le client retrouve le meme QR.
+         *
+         * Sans PICKUP_TOKEN_SECRET, on ne bloque pas l'encaissement : l'acheteur
+         * a paye et doit voir sa confirmation. Le QR sera genere au prochain
+         * rappel webhook/sync une fois le secret configure.
          */
-        $this->pickupQrCodes->grant($order);
+        try {
+            $this->pickupQrCodes->grant($order);
+        } catch (ApiException $exception) {
+            if ($exception->errorCode() !== 'PICKUP_NOT_CONFIGURED') {
+                throw $exception;
+            }
+
+            Log::critical('Commande payee mais PICKUP_TOKEN_SECRET absent : QR retrait non genere.', [
+                'order_uuid' => $order->uuid,
+                'order_number' => $order->order_number,
+            ]);
+        }
     }
 
     /**
