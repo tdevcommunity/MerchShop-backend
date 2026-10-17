@@ -79,6 +79,21 @@ class OrderPaymentTest extends TestCase
 
         $callback = $this->gateway->initiations[0]['callback_url'] ?? '';
         $this->assertStringContainsString('orderId='.rawurlencode($order->uuid), $callback);
+        $this->assertStringNotContainsString('orderToken=', $callback);
+    }
+
+    public function test_it_appends_guest_order_token_to_the_payment_return_url(): void
+    {
+        $order = $this->pendingOrder(null);
+        $token = app(OrderAccess::class)->issueFor($order);
+
+        $this->withHeader(OrderAccess::HEADER, $token)
+            ->postJson("/api/v1/orders/{$order->uuid}/payment")
+            ->assertOk();
+
+        $callback = $this->gateway->initiations[0]['callback_url'] ?? '';
+        $this->assertStringContainsString('orderId='.rawurlencode($order->uuid), $callback);
+        $this->assertStringContainsString('orderToken=', $callback);
     }
 
     public function test_it_lets_a_guest_pay_with_the_token_it_received_at_creation(): void
