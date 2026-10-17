@@ -17,7 +17,7 @@ final class SyncPaymentReturnRequest extends ApiRequest
     public function rules(): array
     {
         return [
-            'transaction_id' => ['required', 'string', 'min:3', 'max:120'],
+            'transaction_id' => ['sometimes', 'nullable', 'string', 'min:3', 'max:120'],
         ];
     }
 }

@@ -21,7 +21,7 @@ Le numero Mobile Money est saisi sur le portail Velto/FedaPay, pas dans le formu
 | `VELTO_BASE_URL` | Gate API, ex. `https://velto-gate.kiiako.io/v1` |
 | `VELTO_WEB_ORIGIN` | Origine du **shop** (`http://localhost:3000` ou `https://shop.ourtdev.com`) pour les en-tetes Origin/Referer |
 | `PAYMENT_WEBHOOK_SECRET_VELTO` | Verification `X-Velto-Signature` |
-| `PICKUP_TOKEN_SECRET` | Secret QR retrait au stand (obligatoire en prod). Sans lui, la confirmation apres paiement pickup echoue. En local, `APP_KEY` sert de repli si la variable est vide. |
+| `PICKUP_TOKEN_SECRET` | Secret QR retrait au stand (obligatoire pour le QR). Sans lui, le paiement est quand meme confirme mais le QR peut manquer jusqu'a configuration du secret. En local, `APP_KEY` sert de repli si la variable est vide. |
 
 ## Portail Velto
 

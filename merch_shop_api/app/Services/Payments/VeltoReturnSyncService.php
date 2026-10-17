@@ -48,6 +48,21 @@ final class VeltoReturnSyncService
         return $this->applyRemotePaymentState($payment, $order, $transactionId, $data);
     }
 
+    public function syncFromReturn(Order $order, ?string $transactionId): Order
+    {
+        $resolved = is_string($transactionId) ? trim($transactionId) : '';
+
+        if ($resolved === '') {
+            $resolved = $this->latestVeltoTransactionId($order) ?? '';
+        }
+
+        if ($resolved === '') {
+            return $order->fresh(['payments', 'items', 'invoice']) ?? $order;
+        }
+
+        return $this->sync($order, $resolved);
+    }
+
     public function sync(Order $order, string $transactionId): Order
     {
         $payment = $this->matchingPayment($order, $transactionId);
@@ -158,5 +173,22 @@ final class VeltoReturnSyncService
         }
 
         return $payment;
+    }
+
+    private function latestVeltoTransactionId(Order $order): ?string
+    {
+        $order->loadMissing('payments');
+
+        /** @var Payment|null $payment */
+        $payment = $order->payments
+            ->filter(function (Payment $candidate): bool {
+                return $candidate->provider === PaymentProvider::VELTO
+                    && is_string($candidate->transaction_id)
+                    && $candidate->transaction_id !== '';
+            })
+            ->sortByDesc(fn (Payment $candidate) => $candidate->created_at?->getTimestamp() ?? 0)
+            ->first();
+
+        return $payment?->transaction_id;
     }
 }

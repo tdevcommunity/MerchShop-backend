@@ -57,6 +57,66 @@ class SyncPaymentReturnTest extends TestCase
         $this->assertSame(OrderStatus::PAID, $order->refresh()->status);
     }
 
+    public function test_it_syncs_using_the_stored_transaction_when_id_is_omitted(): void
+    {
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+        $payment->update([
+            'provider' => PaymentProvider::VELTO,
+            'transaction_id' => 'tnx_sync_implicit',
+        ]);
+
+        Http::fake([
+            'https://velto-gate.test/v1/payments/tnx_sync_implicit' => Http::response([
+                'status' => true,
+                'data' => [
+                    'id' => 'tnx_sync_implicit',
+                    'external_reference' => $payment->uuid,
+                    'status' => 'APPROVED',
+                    'amount' => 2500,
+                ],
+            ], 200),
+        ]);
+
+        $this->actingAs($order->user)
+            ->postJson("/api/v1/orders/{$order->uuid}/payment/sync-return", [])
+            ->assertOk()
+            ->assertJsonPath('data.status', OrderStatus::PAID->value);
+    }
+
+    public function test_it_marks_paid_even_when_pickup_secret_is_missing(): void
+    {
+        config()->set('orders.pickup.secret', '');
+
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+        $payment->update([
+            'provider' => PaymentProvider::VELTO,
+            'transaction_id' => 'tnx_pickup_cfg',
+        ]);
+
+        Http::fake([
+            'https://velto-gate.test/v1/payments/tnx_pickup_cfg' => Http::response([
+                'status' => true,
+                'data' => [
+                    'id' => 'tnx_pickup_cfg',
+                    'external_reference' => $payment->uuid,
+                    'status' => 'APPROVED',
+                    'amount' => 2500,
+                ],
+            ], 200),
+        ]);
+
+        $this->actingAs($order->user)
+            ->postJson("/api/v1/orders/{$order->uuid}/payment/sync-return", [
+                'transaction_id' => 'tnx_pickup_cfg',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', OrderStatus::PAID->value);
+
+        $this->assertSame(OrderStatus::PAID, $order->refresh()->status);
+    }
+
     public function test_it_refuses_a_transaction_that_does_not_match_the_order(): void
     {
         $order = $this->pendingOrder();

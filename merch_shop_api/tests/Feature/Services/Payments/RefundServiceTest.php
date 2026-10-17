@@ -281,13 +281,11 @@ final class RefundServiceTest extends TestCase
             'transaction_id' => 'VELTO-1',
         ]);
 
-        $order->update(['status' => OrderStatus::PAID]);
-
-        return $order->refresh();
+        return $this->orders->markPaid($order->refresh());
     }
 
     /**
-     * Une commande creee par le vrai service, avec son stock reserve.
+     * Une commande creee par le vrai service, avec le stock consomme au reglement.
      *
      * Passer par `OrderService::create` plutot que par des insertions a la main
      * evite que le test decrive une commande que la production ne sait pas
