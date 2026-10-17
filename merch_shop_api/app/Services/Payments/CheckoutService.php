@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Repositories\Contracts\PaymentRepositoryInterface;
 use App\Support\Api\Money;
+use App\Support\Orders\OrderAccess;
 use App\Support\Payments\FedapayCustomerResolver;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -54,6 +55,7 @@ final class CheckoutService
         private readonly Money $money,
         private readonly FedapayCustomerResolver $customers,
         private readonly VeltoReturnSyncService $veltoReturnSync,
+        private readonly OrderAccess $orderAccess,
     ) {}
 
     /**
@@ -115,7 +117,11 @@ final class CheckoutService
             );
         }
 
-        $callbackUrl = $this->returnUrlForOrder($callbackUrl, $order);
+        $guestReturnToken = $order->user_id === null
+            ? $this->orderAccess->issueFor($order)
+            : null;
+
+        $callbackUrl = $this->returnUrlForOrder($callbackUrl, $order, $guestReturnToken);
 
         /*
          * L'appel sortant se fait ici, en dehors de toute transaction : c'est la
@@ -269,10 +275,20 @@ final class CheckoutService
         return max(0, $this->money->toAmount($order->total) - $settled);
     }
 
-    private function returnUrlForOrder(string $base, Order $order): string
-    {
+    private function returnUrlForOrder(
+        string $base,
+        Order $order,
+        ?string $guestAccessToken = null,
+    ): string {
+        $params = ['orderId' => $order->uuid];
+
+        if (is_string($guestAccessToken) && $guestAccessToken !== '') {
+            $params['orderToken'] = $guestAccessToken;
+        }
+
+        $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
         $separator = str_contains($base, '?') ? '&' : '?';
 
-        return $base.$separator.'orderId='.rawurlencode($order->uuid);
+        return $base.$separator.$query;
     }
 }

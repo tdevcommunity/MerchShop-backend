@@ -42,4 +42,10 @@ Le numero Mobile Money est saisi sur le portail Velto/FedaPay, pas dans le formu
 
 ## Retour navigateur
 
-L'API ajoute `orderId={uuid}` a `callback_url` pour que la page de retour puisse suivre la commande meme si `sessionStorage` est perdu.
+L'API ajoute `orderId={uuid}` et, pour les invites, `orderToken={jeton}` a `callback_url` pour que le retour Mobile Money fonctionne meme si le navigateur a perdu le stockage local.
+
+## Depannage prod (callback)
+
+- `PAYMENT_RETURN_URL` doit etre **exactement** l'URL publique du shop, ex. `https://shop.ourtdev.com/checkout/payment-return` (HTTPS, bon domaine, pas de `localhost`).
+- `CORS_ALLOWED_ORIGINS` sur l'API doit inclure `https://shop.ourtdev.com`.
+- Webhook Velto joignable sur l'API ; sans webhook, la page de retour s'appuie sur `sync-return` (besoin du jeton `orderToken` ou du stockage local).
