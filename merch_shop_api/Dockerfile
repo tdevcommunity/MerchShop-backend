@@ -27,7 +27,7 @@ RUN npm run build
 # satisfait composer.json sans toucher au lock. Sur du 8.3, composer install
 # echoue sur une vingtaine de paquets Symfony.
 # ---------------------------------------------------------------------------
-FROM php:8.4-cli-bookworm
+FROM php:8.5-cli-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
