@@ -128,7 +128,7 @@ final class OrderService
     /**
      * Enregistre une commande, reserve le stock et ouvre la tentative de paiement.
      *
-     * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null, customer_name: string, customer_phone_number: string}  $data
+     * @param  array{user: User|null, items: array<int, array{uuid: string, quantity: int}>, fulfillment_method: FulfillmentMethod, shipping_address: string|null, payment_method: PaymentMethod, participant_id: string|null, customer_name: string, customer_phone_number: string, customer_email?: string|null}  $data
      */
     public function create(array $data): Order
     {
@@ -197,6 +197,16 @@ final class OrderService
                 'customer_name' => $data['customer_name'],
                 'customer_phone_number' => PhoneNumber::normalise($data['customer_phone_number']),
                 'customer_phone_country' => PhoneNumber::countryCode(),
+
+                /*
+                 * Adresse email, quand le client en donne une.
+                 *
+                 * Elle n'est pas exigee, mais des qu'elle existe elle est
+                 * figee ici — au meme titre que le nom et le numero — pour
+                 * que l'envoi de confirmation et du QR apres paiement ne
+                 * depende pas d'un compte qui pourrait disparaitre.
+                 */
+                'customer_email' => $data['customer_email'] ?? null,
                 'sub_total' => $subTotal,
                 'shipping_address' => $data['shipping_address'] ?? null,
                 'discount' => $discount,

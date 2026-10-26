@@ -4,6 +4,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Mail\OrderConfirmationMail;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
@@ -12,6 +13,7 @@ use App\Models\Variant;
 use App\Services\OrderService;
 use App\Services\Payments\FedapayEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -91,6 +93,25 @@ class FedapayWebhookTest extends TestCase
         $this->assertSame(1, Invoice::query()->count());
         $this->assertSame(OrderStatus::PAID, $order->refresh()->status);
         $this->assertSame(PaymentStatus::SUCCESS, $payment->refresh()->status);
+    }
+
+    public function test_it_sends_one_confirmation_however_many_times_fedapay_repeats_itself(): void
+    {
+        /*
+         * Meme raison que pour la facture, meme enjeu vu du client : deux fois
+         * le meme email pour un meme paiement se lit comme deux commandes, et
+         * le second QR arrive sans qu'une seconde commande existe. Le verrou —
+         * un paiement deja final ne reconfirme rien — devait donc couvrir
+         * l'envoi aussi, pas seulement l'ecriture en base.
+         */
+        $order = $this->pendingOrder();
+        $payment = $order->payments()->firstOrFail();
+        $body = $this->approved($payment);
+
+        $this->send($body)->assertOk();
+        $this->send($body)->assertOk();
+
+        Mail::assertSentTimes(OrderConfirmationMail::class, 1);
     }
 
     public function test_it_reads_the_transaction_under_the_object_key_as_well(): void

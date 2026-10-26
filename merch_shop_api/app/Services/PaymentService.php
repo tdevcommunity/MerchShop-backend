@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PaymentStatus;
 use App\Exceptions\ApiException;
+use App\Jobs\SendOrderConfirmationEmail;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Repositories\Contracts\OrderRepositoryInterface;
@@ -195,6 +196,38 @@ final class PaymentService
          * sans changer la valeur : le client retrouve le meme QR.
          */
         $this->pickupQrCodes->grant($order);
+
+        $this->dispatchConfirmationEmail($order);
+    }
+
+    /**
+     * Met en file l'envoi de la confirmation au client.
+     *
+     * Adresse de la commande d'abord, celle du compte ensuite : la copie
+     * figee a la commande prime, mais un compte qui a donne son email au
+     * moment de l'inscription reste un canal valable quand la commande n'en
+     * porte pas. Une commande invitee sans email n'a aucun canal, et
+     * l'absence est un fait a journaliser, pas une erreur : rien n'a echoue,
+     * aucun envoi n'est du.
+     *
+     * Le job porte `afterCommit` : il ne part en file qu'une fois la
+     * transaction de confirmation etablie. Une transaction annulee ne laisse
+     * donc pas un email annoncer un paiement qui n'a pas eu lieu.
+     */
+    private function dispatchConfirmationEmail(Order $order): void
+    {
+        $recipient = $order->customer_email ?? $order->user?->email;
+
+        if ($recipient === null) {
+            Log::info('Confirmation de commande non envoyee : aucune adresse email.', [
+                'order_uuid' => $order->uuid,
+                'order_number' => $order->order_number,
+            ]);
+
+            return;
+        }
+
+        SendOrderConfirmationEmail::dispatch($order, $recipient);
     }
 
     /**

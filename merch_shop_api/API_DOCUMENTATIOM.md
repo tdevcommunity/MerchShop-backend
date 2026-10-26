@@ -162,6 +162,7 @@ Réponse attendue : `201` ou `200` avec un objet `ProductResource` contenant les
 |  | `customer_name` | `string` | Oui | nom de l'acheteur |
 |  | `customer_phone_number` | `string` | Oui | numéro togolais |
 |  | `customer_phone_country` | `string|null` | Non | code pays sur 2 caractères |
+|  | `customer_email` | `string|null` | Non | adresse de réception de la confirmation de paiement (RFC valide, 255 caractères max) |
 |  | `fulfillment_method` | `string` | Oui | `pickup` ou `delivery` |
 |  | `shipping_address` | `string|null` | Conditionnel | obligatoire si `delivery` |
 |  | `payment_method` | `string` | Oui | `mobile_money` ou `card` |
@@ -657,6 +658,7 @@ Payload attendu :
 | `items` | `array<object>` | Oui | lignes de commande |
 | `fulfillment_method` | `string` | Oui | `pickup` ou `delivery` |
 | `shipping_address` | `string|null` | Non | adresse de livraison si applicable |
+| `customer_email` | `string|null` | Non | adresse de réception de la confirmation de paiement |
 | `participant_id` | `string|null` | Non | identifiant participant pour un achat externe |
 
 Payload d'une ligne de commande :
@@ -713,11 +715,12 @@ Exemple de réponse attendue :
 ```json
 {
   "data": [
-    {
-      "id": "44444444-5555-6666-7777-888888999999",
-      "orderNumber": "ORD-20260930-0001",
-      "status": "pending_payment",
-      "fulfillmentMethod": "pickup",
+{
+  "id": "44444444-5555-6666-7777-888888999999",
+  "orderNumber": "ORD-20260930-0001",
+  "status": "pending_payment",
+  "fulfillmentMethod": "pickup",
+  "customerEmail": "awa@example.com",
       "total": 2500,
       "createdAt": "2026-09-30T12:00:00Z"
     }
@@ -973,6 +976,17 @@ Seul le **statut de la transaction** décide de l'effet : `approved` et
 qu'un refus par défaut, pour ne pas faire passer une transaction réussie pour
 un échec. Les événements de remboursement sont acquittés sans écriture : le
 remboursement est une décision du guichet, pas d'un événement.
+
+Un règlement déclenche en outre l'envoi de la **confirmation de commande par
+email**, mis en file dans la transaction de confirmation (`afterCommit`) : une
+transaction annulée ne laisse donc pas partir un email annonçant un paiement
+qui n'a pas eu lieu, et la réponse au webhook n'attend pas le serveur SMTP.
+Le destinataire est `customer_email` si la commande en porte une, sinon le
+mail du compte ; sans aucun des deux, rien n'est envoyé — l'absence est
+journalisée, le paiement passe quand même. Une commande de retrait reçoit le
+QR en pièce jointe et dans le corps, une commande livrée une simple
+confirmation. Un webhook rejoué ne renvoie rien : le même verrou que pour la
+facture couvre l'envoi.
 
 Payload attendu pour les agrégateurs génériques (FedaPay utilise l'enveloppe
 décrite ci-dessus) :

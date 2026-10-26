@@ -39,6 +39,13 @@ class OrderFactory extends Factory
             'customer_name' => fake()->lastName().' '.fake()->firstName(),
             'customer_phone_number' => '0'.fake()->numerify('########'),
             'customer_phone_country' => 'ci',
+
+            /*
+             * Adresse email fournie par defaut : la plupart des commandes en
+             * recoivent une, et un etat « sans email » explicite existe pour
+             * tester le cas ou le client n'en donne pas.
+             */
+            'customer_email' => fake()->safeEmail(),
             'fedapay_customer_id' => null,
             'sub_total' => $subTotal,
             'shipping_address' => null,
@@ -61,6 +68,19 @@ class OrderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'user_id' => null,
+        ]);
+    }
+
+    /**
+     * Commande passee sans adresse email.
+     *
+     * Le champ est facultatif en production : cet etat rend visible le cas
+     * ou aucun canal de courriel n'existe pour envoyer la confirmation.
+     */
+    public function withoutEmail(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'customer_email' => null,
         ]);
     }
 

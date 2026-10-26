@@ -186,6 +186,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'customer_name', type: 'string', minLength: 2, maxLength: 120),
         new OA\Property(property: 'customer_phone_number', type: 'string', example: '+22890123456'),
         new OA\Property(property: 'customer_phone_country', type: 'string', nullable: true, minLength: 2, maxLength: 2, example: 'tg'),
+        new OA\Property(property: 'customer_email', type: 'string', format: 'email', nullable: true, maxLength: 255, description: 'Adresse a laquelle la confirmation de paiement est envoyee. A defaut, le compte est utilise ; une commande invitee sans email ne recoit rien.'),
         new OA\Property(property: 'fulfillment_method', type: 'string', enum: ['pickup', 'delivery']),
         new OA\Property(property: 'shipping_address', type: 'string', nullable: true, minLength: 5, maxLength: 500, description: 'Obligatoire si fulfillment_method vaut delivery.'),
         new OA\Property(property: 'payment_method', type: 'string', enum: ['mobile_money', 'card']),
