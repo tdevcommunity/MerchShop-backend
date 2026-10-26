@@ -4,7 +4,7 @@
 # Etape 1 : compilation des assets Vite/Tailwind (laravel-vite-plugin ecrit
 # dans public/build, consomme par @vite dans resources/views/welcome.blade.php)
 # ---------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS assets
+FROM node:26-bookworm-slim AS assets
 
 WORKDIR /build
 
