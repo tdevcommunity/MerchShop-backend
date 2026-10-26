@@ -60,10 +60,14 @@ final class InventoryService
 
     /**
      * Corrige le stock d'une declinaison.
-     *
-     * @param  InventoryReason|string  $reason
      */
-    public function adjust(Variant $variant, int $delta, InventoryReason|string $reason, User $actor, string $note = ''): InventoryAdjustment
+    public function adjust(
+        Variant $variant,
+        int $delta,
+        InventoryReason|string $reason,
+        User $actor,
+        string $note = ''
+    ): InventoryAdjustment
     {
         $motif = $reason instanceof InventoryReason ? $reason : InventoryReason::tryFrom($reason);
 

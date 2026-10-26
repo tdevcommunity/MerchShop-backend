@@ -3,7 +3,6 @@
 namespace App\Repositories;
 
 use App\Models\AnalyticsEvent;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
  * Repositorie pour les evenements analytiques.

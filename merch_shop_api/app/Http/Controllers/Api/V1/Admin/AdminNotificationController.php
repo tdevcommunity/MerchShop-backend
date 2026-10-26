@@ -19,7 +19,7 @@ use Illuminate\Http\JsonResponse;
  * ne dependrait d'aucun fait observable — et disparaitrait au premier
  * reapprovisionnement qui ne l'aurait pas concernee. Une alerte « les tickets
  * autonomes sont presqu'epuises » posee a la main serait vraie jusqu'a l.epuise,
-     * puis encore longtemps apres, ce qui est l'inverse de l'alerte de stock.
+ * puis encore longtemps apres, ce qui est l'inverse de l'alerte de stock.
  *
  * Elle ne peut pas non plus etre marquee comme lue. Ce qui est lu n'est pas un
  * etat du systeme mais une action d'une personne, et une action ne se derive pas

@@ -1,20 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Api\V1\Admin;
 
-use App\Enums\CatalogStatus;
-use App\Enums\FulfillmentMethod;
-use App\Enums\OrderStatus;
-use App\Enums\PickupStatus;
-use App\Enums\UserRole;
-use App\Enums\UserStatus;
-use App\Models\AuditLog;
-use App\Models\InventoryAdjustment;
-use App\Models\Order;
 use App\Models\User;
-use App\Models\Variant;
-use App\Support\Api\AuditAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -83,7 +75,7 @@ class AdminAccessTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('protectedRoutes')]
+    #[DataProvider('protectedRoutes')]
     public function test_it_refuses_an_anonymous_caller_on(string $url): void
     {
         /*
@@ -96,7 +88,7 @@ class AdminAccessTest extends TestCase
             ->assertJsonPath('error.code', 'UNAUTHENTICATED');
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('protectedRoutes')]
+    #[DataProvider('protectedRoutes')]
     public function test_it_refuses_a_customer_on(string $url): void
     {
         $this->actingAs(User::factory()->create())
@@ -105,13 +97,13 @@ class AdminAccessTest extends TestCase
             ->assertJsonPath('error.code', 'BACKOFFICE_FORBIDDEN');
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('protectedRoutes')]
+    #[DataProvider('protectedRoutes')]
     public function test_it_admits_a_staff_on(string $url): void
     {
         $this->actingAs(User::factory()->staff()->create())->getJson($url)->assertOk();
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('adminOnlyRoutes')]
+    #[DataProvider('adminOnlyRoutes')]
     public function test_it_refuses_an_anonymous_caller_on_the_admin_routes(string $url): void
     {
         $this->getJson($url)
@@ -119,7 +111,7 @@ class AdminAccessTest extends TestCase
             ->assertJsonPath('error.code', 'UNAUTHENTICATED');
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('adminOnlyRoutes')]
+    #[DataProvider('adminOnlyRoutes')]
     public function test_it_refuses_a_customer_on_the_admin_routes(string $url): void
     {
         $this->actingAs(User::factory()->create())
@@ -139,7 +131,7 @@ class AdminAccessTest extends TestCase
      * ailleurs : le guichetier verrait le journal s'ouvrir sans erreur, et rien
      * dans la suite ne le rattraperait.
      */
-    #[\PHPUnit\Framework\Attributes\DataProvider('adminOnlyRoutes')]
+    #[DataProvider('adminOnlyRoutes')]
     public function test_it_refuses_a_staff_on_the_admin_routes(string $url): void
     {
         $this->actingAs(User::factory()->staff()->create())
@@ -148,7 +140,7 @@ class AdminAccessTest extends TestCase
             ->assertJsonPath('error.code', 'BACKOFFICE_FORBIDDEN');
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('adminOnlyRoutes')]
+    #[DataProvider('adminOnlyRoutes')]
     public function test_it_admits_an_admin_on_the_admin_routes(string $url): void
     {
         $this->actingAs(User::factory()->admin()->create())->getJson($url)->assertOk();

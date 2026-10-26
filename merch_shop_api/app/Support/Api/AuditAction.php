@@ -64,3 +64,4 @@ enum AuditAction: string
     /** Un mot de passe de guichet a ete reinitialise. */
     case USER_PASSWORD_RESET = 'user_password_reset';
 }
+

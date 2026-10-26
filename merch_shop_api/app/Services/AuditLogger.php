@@ -88,3 +88,4 @@ final class AuditLogger
         $this->record($action, $resource, $actor, $old, null, $resourceId);
     }
 }
+

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature\Api\V1\Admin;
 
 use App\Enums\OrderStatus;
@@ -12,6 +14,7 @@ use App\Models\Variant;
 use App\Services\OrderService;
 use Database\Factories\PaymentFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -79,7 +82,7 @@ class AdminBackofficeTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('moneyStatuses')]
+    #[DataProvider('moneyStatuses')]
     public function test_it_refuses_to_declare_money_from_the_counter(int $status): void
     {
         $order = Order::factory()->paid()->create();

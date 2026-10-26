@@ -30,6 +30,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 final class AdminAuditController extends ApiController
 {
     use GuardsBackofficeAction;
+
     /**
      * Les traces, de la plus recente a la plus ancienne.
      *

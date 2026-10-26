@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
+
     public function up(): void
     {
         Schema::create('audit_logs', function (Blueprint $table): void {
@@ -98,3 +99,4 @@ return new class extends Migration
         Schema::dropIfExists('audit_logs');
     }
 };
+

@@ -1,6 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureBackoffice;
 use App\Support\Api\ApiErrorResponder;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -86,7 +89,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * ajoutée sans lui : un oubli serait un endpoint public.
          */
         $middleware->alias([
-            'backoffice' => \App\Http\Middleware\EnsureBackoffice::class,
+            'backoffice' => EnsureBackoffice::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
