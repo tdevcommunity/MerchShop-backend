@@ -1,12 +1,10 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Date as Carbon;
+use Illuminate\Support\Carbon;
 
 /**
  * Origine d'une session de visite.
@@ -22,8 +20,8 @@ use Illuminate\Support\Facades\Date as Carbon;
  * ce qui est impossible avec une ligne par visite.
  *
  * @property string $session_id
- * @property \Illuminate\Support\Carbon $first_visit_at
- * @property \Illuminate\Support\Carbon $last_visit_at
+ * @property Carbon $first_visit_at
+ * @property Carbon $last_visit_at
  */
 #[Fillable([
     'session_id',

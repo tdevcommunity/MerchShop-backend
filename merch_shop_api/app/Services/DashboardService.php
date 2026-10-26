@@ -311,4 +311,3 @@ final class DashboardService
         ];
     }
 }
-

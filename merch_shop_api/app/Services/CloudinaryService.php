@@ -27,7 +27,6 @@ final class CloudinaryService
 
     private string $folder;
 
-
     public function __construct()
     {
         $this->cloudName = (string) config('cloudinary.cloud_name', '');
@@ -58,7 +57,7 @@ final class CloudinaryService
         $signature = $this->sign($publicId, $timestamp);
 
         $cloudName = $this->cloudName;
-        $endpoint = 'https://api.cloudinary.com/v1_1/' . $cloudName . '/image/upload';
+        $endpoint = 'https://api.cloudinary.com/v1_1/'.$cloudName.'/image/upload';
 
         $response = Http::attach(
             'file',

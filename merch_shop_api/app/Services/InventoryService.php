@@ -67,8 +67,7 @@ final class InventoryService
         InventoryReason|string $reason,
         User $actor,
         string $note = ''
-    ): InventoryAdjustment
-    {
+    ): InventoryAdjustment {
         $motif = $reason instanceof InventoryReason ? $reason : InventoryReason::tryFrom($reason);
 
         if ($motif === null) {

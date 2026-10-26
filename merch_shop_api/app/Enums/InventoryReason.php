@@ -77,4 +77,3 @@ enum InventoryReason: string
         };
     }
 }
-

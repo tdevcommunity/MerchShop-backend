@@ -155,4 +155,3 @@ Route::prefix('admin')->middleware('backoffice')->name('admin.')->group(function
     Route::patch('/users/{uuid}', [AdminUserController::class, 'update'])->name('users.update');
     Route::post('/users/{uuid}/reset-password', [AdminUserController::class, 'resetPassword'])->name('users.reset-password');
 });
-

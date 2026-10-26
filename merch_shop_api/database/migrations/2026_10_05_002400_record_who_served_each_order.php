@@ -29,7 +29,6 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
-
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table): void {
@@ -48,4 +47,3 @@ return new class extends Migration
         });
     }
 };
-

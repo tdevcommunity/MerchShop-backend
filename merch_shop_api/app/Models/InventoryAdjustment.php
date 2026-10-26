@@ -115,4 +115,3 @@ class InventoryAdjustment extends Model
         return $this->delta > 0;
     }
 }
-
