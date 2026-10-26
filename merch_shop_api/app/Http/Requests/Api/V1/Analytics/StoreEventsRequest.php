@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Api\V1\Analytics;
 
 use App\Http\Requests\ApiRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * Payload d'envoi d'evenements d'analyse.

@@ -4,7 +4,7 @@
 # Etape 1 : compilation des assets Vite/Tailwind (laravel-vite-plugin ecrit
 # dans public/build, consomme par @vite dans resources/views/welcome.blade.php)
 # ---------------------------------------------------------------------------
-FROM node:22-bookworm-slim AS assets
+FROM node:22.12.0-bookworm-slim AS assets
 
 WORKDIR /build
 
@@ -27,7 +27,7 @@ RUN npm run build
 # satisfait composer.json sans toucher au lock. Sur du 8.3, composer install
 # echoue sur une vingtaine de paquets Symfony.
 # ---------------------------------------------------------------------------
-FROM php:8.4-cli-bookworm
+FROM php:8.4.4-cli-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 

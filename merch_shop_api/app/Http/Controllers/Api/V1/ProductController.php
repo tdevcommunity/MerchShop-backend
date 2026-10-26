@@ -27,7 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
 final class ProductController extends ApiController
 {
     public function __construct(
-        private readonly ProductService    $products,
+        private readonly ProductService $products,
         private readonly CloudinaryService $cloudinary,
     ) {}
 

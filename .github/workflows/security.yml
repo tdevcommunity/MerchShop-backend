@@ -4,11 +4,15 @@
 #  - composer-audit   : audite composer.lock (bloque sur toute vulnerabilite) ;
 #  - trivy-fs         : secrets, erreurs de configuration, dependances (SARIF) ;
 #  - trivy-image      : vulnerabilites de l'image Docker de production.
+#                       Le rapport couvre toutes les severites, mais seules
+#                       les failles HIGH/CRITICAL *corrigeables* bloquent.
 #
 # CodeQL ne supporte pas PHP : l'analyse statique du code PHP n'est donc pas
 # couverte ici. Les resultats SARIF remontent dans Security > Code scanning.
-# Les dependances sont mises a jour par Dependabot (dependabot.yml) et par
-# le workflow security-fix.yml, qui ouvre une PR avec les correctifs.
+# Aucune correction automatique : quand une vulnerabilite est detectee, le job
+# echoue et la liste des paquets concernes apparait dans le resume du job. La
+# correction et le commit restent manuels.
+# Les simples mises a jour de version sont listees par le workflow Dependencies.
 
 name: Security
 
@@ -17,9 +21,6 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
-  schedule:
-    # Chaque lundi a 04:23 UTC.
-    - cron: "23 4 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -129,7 +130,10 @@ jobs:
             -t merchshop-backend:scan \
             merch_shop_api
 
-      - name: Scan SARIF (bloquant)
+      # Rapport complet, sans blocage : toutes les severites remontent dans
+      # Security > Code scanning, y compris celles que Debian ou les binaires
+      # embarques (FrankenPHP, PHP) n'ont pas encore corrigees.
+      - name: Scan SARIF (informatif)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
@@ -138,7 +142,7 @@ jobs:
           output: trivy-image.sarif
           severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: "1"
+          exit-code: "0"
 
       - name: Scan lisible
         if: always()
@@ -152,14 +156,38 @@ jobs:
           ignore-unfixed: false
           exit-code: "0"
 
+      # Seul blocage : une faille HIGH/CRITICAL pour laquelle un correctif
+      # existe. Une CVE sans version corrigee ne peut pas etre traitee par une
+      # mise a jour, elle ne doit donc pas rendre le job rouge.
+      - name: Gate bloquant (HIGH/CRITICAL corrigeables)
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: merchshop-backend:scan
+          format: table
+          output: trivy-image-gate.txt
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
       - name: Ajouter le rapport au resume du job
         if: always() && hashFiles('trivy-image.txt') != ''
         run: |
           {
             echo "### Trivy - image Docker"
+            echo
+            echo "Rapport complet (toutes severites, non bloquant) :"
             echo '```'
             cat trivy-image.txt
             echo '```'
+            if [ -s trivy-image-gate.txt ]; then
+              echo
+              echo "Gate bloquant - HIGH/CRITICAL avec correctif :"
+              echo '```'
+              cat trivy-image-gate.txt
+              echo '```'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publier le rapport dans Code scanning

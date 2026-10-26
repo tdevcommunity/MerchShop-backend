@@ -30,7 +30,7 @@ final class AdminDashboardController extends ApiController
     /**
      * Fenetre maximale d'analyse des echecs de paiement.
      *
- * Borne superieure plutot que minimum : un back-office qui demande un an
+     * Borne superieure plutot que minimum : un back-office qui demande un an
      * d'historique d'echecs recoit ce qu'il demande, jusqu'a la borne. Ce n'est
      * pas un cout notable — un `count` indexe sur `created_at` — mais c'est une
      * convention, et une convention qu'on n'ecrit nulle part est une convention

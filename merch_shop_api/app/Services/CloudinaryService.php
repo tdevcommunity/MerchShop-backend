@@ -20,16 +20,19 @@ use Illuminate\Support\Facades\Log;
 final class CloudinaryService
 {
     private string $cloudName;
+
     private string $apiKey;
+
     private string $apiSecret;
+
     private string $folder;
 
     public function __construct()
     {
         $this->cloudName = (string) config('cloudinary.cloud_name', '');
-        $this->apiKey    = (string) config('cloudinary.api_key', '');
+        $this->apiKey = (string) config('cloudinary.api_key', '');
         $this->apiSecret = (string) config('cloudinary.api_secret', '');
-        $this->folder    = (string) config('cloudinary.folder', 'merch-shop/products');
+        $this->folder = (string) config('cloudinary.folder', 'merch-shop/products');
     }
 
     /**
@@ -49,21 +52,21 @@ final class CloudinaryService
         }
 
         $timestamp = (string) time();
-        $publicId  = $this->buildPublicId($file);
+        $publicId = $this->buildPublicId($file);
 
         $signature = $this->sign($publicId, $timestamp);
 
         $cloudName = $this->cloudName;
-        $endpoint  = "https://api.cloudinary.com/v1_1/{$cloudName}/image/upload";
+        $endpoint = 'https://api.cloudinary.com/v1_1/'.$cloudName.'/image/upload';
 
         $response = Http::attach(
             'file',
             file_get_contents($file->getRealPath()),
             $file->getClientOriginalName(),
         )->post($endpoint, [
-            'api_key'   => $this->apiKey,
+            'api_key' => $this->apiKey,
             'timestamp' => $timestamp,
-            'folder'    => $this->folder,
+            'folder' => $this->folder,
             'public_id' => $publicId,
             'signature' => $signature,
         ]);
@@ -71,7 +74,7 @@ final class CloudinaryService
         if (! $response->successful()) {
             Log::error('CloudinaryService: échec de l\'upload.', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
 
             return null;
@@ -103,7 +106,7 @@ final class CloudinaryService
         $base = preg_replace('/[^a-z0-9]+/', '-', strtolower($base));
         $base = trim((string) $base, '-') ?: 'product';
 
-        return $base . '_' . uniqid('', false);
+        return $base.'_'.uniqid('', false);
     }
 
     /**
@@ -116,7 +119,7 @@ final class CloudinaryService
     private function sign(string $publicId, string $timestamp): string
     {
         $params = [
-            'folder'    => $this->folder,
+            'folder' => $this->folder,
             'public_id' => $publicId,
             'timestamp' => $timestamp,
         ];
@@ -124,10 +127,10 @@ final class CloudinaryService
         ksort($params);
 
         $toSign = implode('&', array_map(
-            static fn (string $k, string $v): string => $k . '=' . $v,
+            static fn (string $k, string $v): string => $k.'='.$v,
             array_keys($params),
             array_values($params),
-        )) . $this->apiSecret;
+        )).$this->apiSecret;
 
         return hash('sha1', $toSign);
     }

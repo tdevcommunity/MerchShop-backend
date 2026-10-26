@@ -2,16 +2,11 @@
 
 namespace App\Services;
 
-use App\Enums\OrderStatus;
-use App\Enums\PaymentStatus;
-use App\Enums\PickupStatus;
-use App\Enums\FulfillmentMethod;
-use App\Enums\PaymentMethod;
-use App\Enums\CatalogStatus;
 use App\Exceptions\ApiException;
 use App\Models\AnalyticsEvent;
 use App\Models\VisitorAcquisition;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Admin\Concerns;
 
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureBackoffice;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -35,8 +36,8 @@ use Illuminate\Http\Request;
  * d'argent, qui ne peut pas non plus etre decide par une couche qui ignore
  * l'action.
  *
- * @see \App\Http\Middleware\EnsureBackoffice pour la question d'entree.
- * @see \App\Models\User::BACKOFFICE_PERMISSIONS pour la matrice.
+ * @see EnsureBackoffice pour la question d'entree.
+ * @see User::BACKOFFICE_PERMISSIONS pour la matrice.
  */
 trait GuardsBackofficeAction
 {

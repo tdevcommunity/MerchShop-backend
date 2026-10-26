@@ -56,7 +56,8 @@ if (rows.length === 0) {
       return `| \`${row.packageName}\` | ${row.severity} | ${row.cve} | \`${row.affected}\` | ${title} |`;
     }),
     "",
-    "Correctifs automatiques : workflow **Security fixes** (`composer update` cible).",
+    "Correction manuelle : `composer update <paquet> --with-dependencies`, puis verifier",
+    "`pint` et les tests, et committer soi-meme `composer.json` / `composer.lock`.",
   );
 }
 

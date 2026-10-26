@@ -80,6 +80,20 @@ jobs:
         working-directory: merch_shop_api
         run: php artisan key:generate --ansi --no-interaction
 
+      # Le runner n'a pas de PostgreSQL : .env.example pointe sur l'hote
+      # "postgres" de docker-compose, injoignable ici. Les commandes artisan
+      # tournent donc sur SQLite, et les tests sur la base :memory: declaree
+      # dans phpunit.xml.
+      - name: Configurer SQLite pour la CI
+        working-directory: merch_shop_api
+        run: |
+          sed -i 's/DB_CONNECTION=pgsql/DB_CONNECTION=sqlite/' .env
+          sed -i 's/DB_HOST=postgres/DB_HOST=127.0.0.1/' .env
+          sed -i "s|DB_DATABASE=merchshop|DB_DATABASE=${GITHUB_WORKSPACE}/merch_shop_api/database/database.sqlite|" .env
+          sed -i 's/DB_PORT=5432/DB_PORT=/' .env
+          sed -i 's/DB_USERNAME=merchshop/DB_USERNAME=/' .env
+          sed -i 's/DB_PASSWORD=/DB_PASSWORD=/' .env
+
       - name: Migrer la base
         working-directory: merch_shop_api
         run: php artisan migrate --force --no-interaction
