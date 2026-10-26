@@ -129,6 +129,15 @@ final class OrderResource extends ApiResource
             'customerPhoneNumber' => $order->customer_phone_number,
             'customerPhoneCountry' => $order->customer_phone_country,
 
+            /*
+             * Adresse email de l'acheteur, quand elle a ete donnee.
+             *
+             * Nullable : une commande peut etre passee sans email. Elle est
+             * rendue ici pour que le client voie ou partira la confirmation,
+             * et pour que le back-office puisse verifier le canal de contact.
+             */
+            'customerEmail' => $order->customer_email,
+
             'participantId' => $order->participant_id,
 
             'subTotal' => $order->sub_total,

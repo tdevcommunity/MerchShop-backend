@@ -62,6 +62,22 @@ final class StoreOrderRequest extends ApiRequest
             'customer_phone_number' => ['required', 'string', new PhoneNumber],
 
             /*
+             * Adresse email, facultative.
+             *
+             * Elle sert a envoyer la confirmation de paiement et le QR de
+             * retrait apres encaissement. Facultative parce qu'un festival
+             * vend aussi a des visiteurs sans email : bloquer une commande sans
+             * adresse priverait le stand d'une vente pour un canal de suivi
+             * qui n'est pas le seul (le numero de telephone suffit au
+             * guichet).
+             *
+             * La regle `rfc` et non `dns` : verifier un domaine exigerait une
+             * resolution DNS a chaque commande, ce qui est lent et rejette des
+             * adresses pourtant valides chez des hebergeurs temporaires.
+             */
+            'customer_email' => ['nullable', 'string', 'email:rfc', 'max:255'],
+
+            /*
              * Le code pays n'est pas demande au client : il est impose par la
              * regle du numero, et lu a la validation plutot que transmis. Le
              * laisser saisir serait inviter a envoyer un depot a l'etranger, et
@@ -114,6 +130,8 @@ final class StoreOrderRequest extends ApiRequest
             'customer_name.required' => 'Le nom de l’acheteur est obligatoire.',
             'customer_name.min' => 'Le nom de l’acheteur est trop court.',
             'customer_phone_number.required' => 'Le numéro de téléphone est obligatoire.',
+            'customer_email.email' => 'L\'adresse email n\'est pas valide.',
+            'customer_email.max' => 'L\'adresse email est trop longue.',
             'customer_phone_country.size' => 'Le code pays doit comporter deux lettres.',
             'fulfillment_method.required' => 'Le mode de retrait est obligatoire.',
             'shipping_address.required_if' => 'Une adresse de livraison est obligatoire pour une livraison.',
@@ -134,6 +152,7 @@ final class StoreOrderRequest extends ApiRequest
             'items.*.quantity' => 'quantite',
             'customer_name' => 'nom de l’acheteur',
             'customer_phone_number' => 'numéro de téléphone',
+            'customer_email' => 'adresse email',
             'fulfillment_method' => 'mode de retrait',
             'shipping_address' => 'adresse de livraison',
             'payment_method' => 'moyen de paiement',

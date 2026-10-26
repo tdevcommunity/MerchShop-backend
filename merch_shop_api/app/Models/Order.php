@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'customer_name',
     'customer_phone_number',
     'customer_phone_country',
+    'customer_email',
     'fedapay_customer_id',
     'user_id',
     'sub_total',

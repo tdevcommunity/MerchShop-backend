@@ -1,14 +1,31 @@
+
 {
-    "$schema": "https://opencode.ai/config.json",
-    "mcp": {
-        "laravel-boost": {
-            "type": "local",
-            "enabled": true,
-            "command": [
-                "php",
-                "artisan",
-                "boost:mcp"
-            ]
-        }
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "build",
+  "subagent_depth": 1,
+  "permission": {
+    "edit": "allow",
+    "external_directory": "deny",
+    "shell": "ask"
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "prompt": "{file:./.opencode/prompts/build.txt}",
+      "permission": {
+        "edit": "allow",
+        "shell": "ask",
+        "task": "allow",
+        "external_directory": "deny"
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "permission": {
+        "edit": "deny",
+        "shell": "ask",
+        "external_directory": "deny"
+      }
     }
+  }
 }
