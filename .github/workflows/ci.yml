@@ -1,0 +1,89 @@
+# Integration continue (backend Laravel) : tourne sur chaque PR et sur develop.
+# Les jobs sont bloquants : si l'un echoue, la PR ne peut pas etre merge.
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+
+jobs:
+  composer-install:
+    name: Composer install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Installer les dependances PHP
+        working-directory: merch_shop_api
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+  pint:
+    name: Pint (formatage PHP)
+    runs-on: ubuntu-latest
+    needs: composer-install
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Installer les dependances PHP
+        working-directory: merch_shop_api
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Verifier le formatage Pint
+        working-directory: merch_shop_api
+        run: ./vendor/bin/pint --test
+
+  test:
+    name: Tests PHPUnit
+    runs-on: ubuntu-latest
+    needs: composer-install
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Installer les dependances PHP
+        working-directory: merch_shop_api
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Creer la base SQLite
+        working-directory: merch_shop_api
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
+      - name: Copier l'environnement
+        working-directory: merch_shop_api
+        run: cp .env.example .env
+
+      - name: Generer la cle APP_KEY
+        working-directory: merch_shop_api
+        run: php artisan key:generate --ansi --no-interaction
+
+      - name: Migrer la base
+        working-directory: merch_shop_api
+        run: php artisan migrate --force --no-interaction
+
+      - name: Lancer les tests
+        working-directory: merch_shop_api
+        run: php artisan test
