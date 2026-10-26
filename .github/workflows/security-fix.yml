@@ -1,0 +1,116 @@
+# Correction automatisee des dependances vulnerables du backend.
+#
+# Chaque lundi, ou manuellement, le job :
+#  1. lit `composer audit --locked` et recupere les paquets vulnerables ;
+#  2. lance un `composer update --with-dependencies` cible sur ces paquets ;
+#  3. verifie que le lockfile reste coherent ;
+#  4. ouvre une PR avec composer.json / composer.lock mis a jour.
+#
+# Rien n'est pousse sur main/develop : la PR doit etre relue et mergee.
+#
+# Optionnel : creer un secret SECURITY_FIX_TOKEN (PAT avec droits contents +
+# pull-requests) pour que les workflows CI se declenchent sur la PR. Avec le
+# GITHUB_TOKEN par defaut, GitHub n'execute pas de workflow sur la PR creee.
+
+name: Security fixes
+
+on:
+  schedule:
+    # Chaque lundi a 05:17 UTC, apres le scan security.yml.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: security-fix
+  cancel-in-progress: false
+
+jobs:
+  composer-fix:
+    name: Corriger les dependances Composer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: gd, intl, pdo_pgsql, redis, zip, bcmath
+          tools: composer:v2
+          coverage: none
+
+      - name: Appliquer les correctifs
+        working-directory: merch_shop_api
+        run: |
+          set -euo pipefail
+          composer audit --locked --format=json > composer-audit.json || true
+          packages=$(jq -r '.advisories // {} | keys[]' composer-audit.json)
+
+          if [ -z "$packages" ]; then
+            echo "Aucune dependance vulnerable : rien a faire."
+            exit 0
+          fi
+
+          echo "Paquets vulnerables :"
+          echo "$packages"
+          # shellcheck disable=SC2086
+          if ! composer update --minimal-changes --with-dependencies --no-scripts --no-interaction --no-progress $packages; then
+            echo "::warning::Aucune version corrigee compatible avec les contraintes pour : $packages"
+          fi
+
+          composer audit --locked --format=json > composer-audit-after.json || true
+          node ../.github/scripts/composer-audit-summary.mjs composer-audit-after.json || true
+
+      - name: Verifier la coherence du lockfile
+        working-directory: merch_shop_api
+        run: |
+          set -euo pipefail
+          composer validate --strict --no-check-publish
+          composer install --dry-run --no-scripts --no-interaction --ignore-platform-reqs
+
+      - name: Ouvrir une pull request
+        env:
+          GH_TOKEN: ${{ secrets.SECURITY_FIX_TOKEN || secrets.GITHUB_TOKEN }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        working-directory: merch_shop_api
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- composer.json composer.lock; then
+            echo "Aucun correctif a appliquer : rien a faire."
+            exit 0
+          fi
+
+          branch="security/composer-fix-$(date -u +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add composer.json composer.lock
+          git commit -m "fix(security): appliquer les correctifs composer audit"
+          git push origin "$branch"
+
+          body=$(cat <<'EOF'
+          Correctifs de securite appliques automatiquement par le workflow
+          **Security fixes** : `composer update --with-dependencies` cible sur les
+          paquets signales par `composer audit`.
+
+          Verifications effectuees avant l'ouverture de la PR :
+          - `composer validate --strict`
+          - `composer install --dry-run`
+
+          Relire le diff du `composer.lock` puis merger si le workflow
+          **Security** est vert.
+          EOF
+          )
+
+          gh pr create \
+            --base "$BASE_BRANCH" \
+            --head "$branch" \
+            --title "fix(security): correctifs composer audit" \
+            --body "$body"

@@ -98,5 +98,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 USER www-data
 
 EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8000/up || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

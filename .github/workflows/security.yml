@@ -1,0 +1,170 @@
+# Detection des vulnerabilites du backend Laravel.
+#
+# Jobs :
+#  - composer-audit   : audite composer.lock (bloque sur toute vulnerabilite) ;
+#  - trivy-fs         : secrets, erreurs de configuration, dependances (SARIF) ;
+#  - trivy-image      : vulnerabilites de l'image Docker de production.
+#
+# CodeQL ne supporte pas PHP : l'analyse statique du code PHP n'est donc pas
+# couverte ici. Les resultats SARIF remontent dans Security > Code scanning.
+# Les dependances sont mises a jour par Dependabot (dependabot.yml) et par
+# le workflow security-fix.yml, qui ouvre une PR avec les correctifs.
+
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Chaque lundi a 04:23 UTC.
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  composer-audit:
+    name: composer audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Auditer les dependances
+        working-directory: merch_shop_api
+        run: |
+          set +e
+          composer audit --locked --format=json > composer-audit.json
+          status=$?
+          set -e
+          node ../.github/scripts/composer-audit-summary.mjs composer-audit.json
+          if [ "$status" -ne 0 ] && [ ! -s composer-audit.json ]; then
+            echo "::error::composer audit n'a pas pu produire de rapport."
+            exit "$status"
+          fi
+
+  trivy-fs:
+    name: Trivy (fichiers, secrets, config)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Scan SARIF (bloquant)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: merch_shop_api
+          scanners: vuln,secret,misconfig
+          format: sarif
+          output: trivy-fs.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
+      - name: Scan lisible
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: merch_shop_api
+          scanners: vuln,secret,misconfig
+          format: table
+          output: trivy-fs.txt
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+
+      - name: Ajouter le rapport au resume du job
+        if: always() && hashFiles('trivy-fs.txt') != ''
+        run: |
+          {
+            echo "### Trivy - dependances, secrets et configuration"
+            echo '```'
+            cat trivy-fs.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier le rapport dans Code scanning
+        if: always() && hashFiles('trivy-fs.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  trivy-image:
+    name: Trivy (image Docker)
+    # Pas de build d'image sur les PR : le workflow Deploy la construit deja
+    # au merge. Le scan tourne sur main/develop, chaque semaine et a la demande.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Construire l'image de production
+        run: |
+          docker build \
+            -f merch_shop_api/Dockerfile.production \
+            -t merchshop-backend:scan \
+            merch_shop_api
+
+      - name: Scan SARIF (bloquant)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: merchshop-backend:scan
+          format: sarif
+          output: trivy-image.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+
+      - name: Scan lisible
+        if: always()
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: merchshop-backend:scan
+          format: table
+          output: trivy-image.txt
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "0"
+
+      - name: Ajouter le rapport au resume du job
+        if: always() && hashFiles('trivy-image.txt') != ''
+        run: |
+          {
+            echo "### Trivy - image Docker"
+            echo '```'
+            cat trivy-image.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier le rapport dans Code scanning
+        if: always() && hashFiles('trivy-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
