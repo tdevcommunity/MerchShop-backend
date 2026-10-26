@@ -1,8 +1,4 @@
-# Mises a jour automatiques des dependances (PR Dependabot).
-# Les alertes de securite doivent aussi etre activees dans
-# Settings > Code security (Dependabot alerts + security updates).
 version: 2
-
 updates:
   - package-ecosystem: composer
     directory: "/merch_shop_api"
@@ -11,29 +7,16 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Paris
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     groups:
       composer-production:
         dependency-type: production
         update-types: [minor, patch]
-      composer-development:
-        dependency-type: development
-        update-types: [minor, patch]
-    ignore:
-      - dependency-name: laravel/framework
-        update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: npm
-    directory: "/merch_shop_api"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "05:00"
-      timezone: Europe/Paris
-    open-pull-requests-limit: 0
-    groups:
-      npm-assets:
-        patterns: ["*"]
+    # Mettre à jour la branche develop
+    commit-updates:
+      branch: develop
+    # Ouvrir les PRs sur la branche develop
+    open-pull-requests-branch: develop
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -42,16 +25,13 @@ updates:
       day: monday
       time: "05:00"
       timezone: Europe/Paris
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5
     groups:
       github-actions:
-        patterns: ["*"]
-
-  - package-ecosystem: docker
-    directory: "/merch_shop_api"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "05:00"
-      timezone: Europe/Paris
-    open-pull-requests-limit: 0
+        patterns:
+          - "*"
+    # Mettre à jour la branche develop
+    commit-updates:
+      branch: develop
+    # Ouvrir les PRs sur la branche develop
+    open-pull-requests-branch: develop
