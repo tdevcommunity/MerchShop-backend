@@ -89,7 +89,7 @@ jobs:
         run: |
           sed -i 's/DB_CONNECTION=pgsql/DB_CONNECTION=sqlite/' .env
           sed -i 's/DB_HOST=postgres/DB_HOST=127.0.0.1/' .env
-          sed -i 's/DB_DATABASE=merchshop/DB_DATABASE=\/var\/www\/html\/database\/database.sqlite/' .env
+          sed -i 's/DB_DATABASE=merchshop/DB_DATABASE=/' .env
           sed -i 's/DB_PORT=5432/DB_PORT=/' .env
           sed -i 's/DB_USERNAME=merchshop/DB_USERNAME=/' .env
           sed -i 's/DB_PASSWORD=/DB_PASSWORD=/' .env
